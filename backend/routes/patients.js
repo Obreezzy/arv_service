@@ -111,12 +111,13 @@ router.post('/predict', async (req, res) => {
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
-            SELECT *, (first_name || ' ' || last_name) AS full_name
+            SELECT *,
+                COALESCE(first_name || ' ' || last_name, full_name) AS display_name
             FROM patients
             WHERE patient_id NOT IN (
                 SELECT patient_id FROM defaulters WHERE status = 'pending'
             )
-            ORDER BY risk_score DESC, last_name ASC
+            ORDER BY risk_score DESC NULLS LAST, full_name ASC
         `);
         const data = result.rows.map(p => ({ ...p, risk_factors: parseFactors(p.risk_factors) }));
         res.json({ success: true, data });
