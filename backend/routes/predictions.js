@@ -1,58 +1,36 @@
 // backend/routes/predictions.js
-// Endpoints:
-//   POST /api/predictions/:patientId        ← "Run AI Risk Predictor" button
-//   POST /api/predictions/batch             ← dashboard bulk scoring
-//   GET  /api/predictions/:patientId/history ← past predictions for a patient
-
 'use strict';
 
-const express  = require('express');
-const router   = express.Router();
-const { Pool } = require('pg');
-const { calculateRiskScore, batchCalculateRisk } = require('../services/riskEngine');
+const express = require('express');
+const router  = express.Router();
+const db      = require('../config/db');
+const { calculateRiskScore, batchCalculateRisk } = require('../services/mlService');
 
-const pool = new Pool({
-    host     : process.env.DB_HOST,
-    port     : process.env.DB_PORT,
-    database : process.env.DB_NAME,
-    user     : process.env.DB_USER,
-    password : process.env.DB_PASSWORD,
-    ssl      : { rejectUnauthorized: false },
-});
-
-// ── Role guard ────────────────────────────────────────────────────────────────
-// Only admin and healthcare_worker can trigger predictions.
-// data_entry staff cannot.
 function requireClinicalRole(req, res, next) {
     const role = req.user?.role;
     if (!role || !['admin', 'healthcare_worker'].includes(role)) {
-        return res.status(403).json({
-            success : false,
-            message : 'Only admins and healthcare workers can run risk predictions.',
-        });
+        return res.status(403).json({ success: false, message: 'Access denied.' });
     }
     next();
 }
 
-
-// ── POST /api/predictions/batch ───────────────────────────────────────────────
-// Must be declared BEFORE /:patientId so Express doesn't treat "batch" as an ID.
-// Called by the dashboard to score multiple patients at once.
-//
-// Body: { patientIds: [1, 2, 3, ...], weatherAlerts: ['Harare'] }
+// ── POST /api/predictions/batch ───────────────────────────────────
 router.post('/batch', requireClinicalRole, async (req, res) => {
     const { patientIds = [], weatherAlerts = [] } = req.body;
 
     if (!Array.isArray(patientIds) || patientIds.length === 0) {
         return res.status(400).json({ success: false, message: 'patientIds array is required.' });
     }
-
     if (patientIds.length > 200) {
         return res.status(400).json({ success: false, message: 'Maximum 200 patients per batch.' });
     }
 
     try {
-        const results = await batchCalculateRisk(patientIds, weatherAlerts);
+        const { rows: patients } = await db.query(
+            `SELECT * FROM patients WHERE patient_id = ANY($1) AND is_active = true`,
+            [patientIds]
+        );
+        const results = await batchCalculateRisk(patients, weatherAlerts);
         return res.json({ success: true, data: results, count: results.length });
     } catch (err) {
         console.error('[predictions/batch]', err.message);
@@ -60,13 +38,9 @@ router.post('/batch', requireClinicalRole, async (req, res) => {
     }
 });
 
-
-// ── POST /api/predictions/:patientId ─────────────────────────────────────────
-// Called when the "Run AI Risk Predictor" button is clicked on a patient page.
-//
-// Body (optional): { weatherAlerts: ['Harare', 'Bulawayo'] }
+// ── POST /api/predictions/:patientId ─────────────────────────────
 router.post('/:patientId', requireClinicalRole, async (req, res) => {
-    const patientId    = parseInt(req.params.patientId, 10);
+    const patientId     = parseInt(req.params.patientId, 10);
     const weatherAlerts = req.body?.weatherAlerts || [];
 
     if (isNaN(patientId)) {
@@ -74,32 +48,74 @@ router.post('/:patientId', requireClinicalRole, async (req, res) => {
     }
 
     try {
-        const result = await calculateRiskScore(patientId, weatherAlerts);
+        // 1. Fetch patient from DB
+        const { rows } = await db.query(
+            `SELECT * FROM patients WHERE patient_id = $1 AND is_active = true`,
+            [patientId]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Patient not found.' });
+        }
+
+        const patient = rows[0];
+
+        // 2. Calculate days overdue from next_pickup_date
+        const daysOverdue = patient.next_pickup_date
+            ? Math.max(0, Math.floor((new Date() - new Date(patient.next_pickup_date)) / (1000 * 60 * 60 * 24)))
+            : 0;
+
+        // 3. Get past defaults count
+        const { rows: defaultRows } = await db.query(
+            `SELECT COUNT(*) as count FROM defaulters WHERE patient_id = $1`,
+            [patientId]
+        );
+        const pastDefaults = parseInt(defaultRows[0]?.count || 0);
+
+        // 4. Run ML prediction
+        const result = await calculateRiskScore(patient, daysOverdue, pastDefaults, weatherAlerts);
+
+        // 5. Save score back to patients table
+        await db.query(
+            `UPDATE patients 
+             SET risk_score = $1, risk_level = $2, risk_factors = $3, updated_at = NOW()
+             WHERE patient_id = $4`,
+            [result.score, result.label, JSON.stringify(result.factors), patientId]
+        );
+
+        // 6. Save to risk_scores audit table
+        await db.query(
+            `INSERT INTO risk_scores 
+             (patient_id, risk_probability, risk_score, risk_label, model_version, scored_by, feature_snapshot)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                patientId,
+                result.score / 100,
+                result.score,
+                result.label,
+                '2.0.0',
+                req.user?.id || null,
+                JSON.stringify(result.factors)
+            ]
+        );
+
         return res.json({
             success : true,
             data    : {
-                patientId        : result.patientId,
-                score            : result.score,            // 0–100
-                label            : result.label,            // Low / Medium / High
-                factors          : result.factors,          // human-readable drivers
-                predictionSource : result.predictionSource, // ml_model or fallback_engine
-                features         : result.features,         // full 28-feature snapshot
-            },
+                patientId : patientId,
+                score     : result.score,
+                label     : result.label,
+                factors   : result.factors,
+            }
         });
+
     } catch (err) {
         console.error(`[predictions/${patientId}]`, err.message);
-
-        if (err.message.includes('not found')) {
-            return res.status(404).json({ success: false, message: err.message });
-        }
         return res.status(500).json({ success: false, message: 'Prediction failed. Please try again.' });
     }
 });
 
-
-// ── GET /api/predictions/:patientId/history ───────────────────────────────────
-// Returns the last 20 predictions ever run for this patient.
-// Used for the audit trail / history panel on the patient detail page.
+// ── GET /api/predictions/:patientId/history ───────────────────────
 router.get('/:patientId/history', requireClinicalRole, async (req, res) => {
     const patientId = parseInt(req.params.patientId, 10);
 
@@ -108,8 +124,8 @@ router.get('/:patientId/history', requireClinicalRole, async (req, res) => {
     }
 
     try {
-        const { rows } = await pool.query(
-            `SELECT id, risk_score, risk_label, prediction_source, feature_snapshot, created_at
+        const { rows } = await db.query(
+            `SELECT score_id, risk_score, risk_label, model_version, feature_snapshot, created_at
              FROM risk_scores
              WHERE patient_id = $1
              ORDER BY created_at DESC
@@ -122,6 +138,5 @@ router.get('/:patientId/history', requireClinicalRole, async (req, res) => {
         return res.status(500).json({ success: false, message: 'Failed to fetch prediction history.' });
     }
 });
-
 
 module.exports = router;
