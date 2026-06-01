@@ -12,7 +12,8 @@ const PORT = process.env.PORT || 3001;  // Changed from 5000 — Flask ML API us
 app.use(cors({
     origin: [
         'http://localhost:3000',
-        'https://arv-defaulters-system.vercel.app',
+        'https://arv-service.vercel.app',        
+        // 'https://arv-defaulters-system.vercel.app', 
         process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true
