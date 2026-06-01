@@ -21,23 +21,49 @@ router.post('/batch', requireClinicalRole, async (req, res) => {
     if (!Array.isArray(patientIds) || patientIds.length === 0) {
         return res.status(400).json({ success: false, message: 'patientIds array is required.' });
     }
-    if (patientIds.length > 200) {
-        return res.status(400).json({ success: false, message: 'Maximum 200 patients per batch.' });
-    }
 
     try {
+        // Fetch full patient objects first
         const { rows: patients } = await db.query(
-            `SELECT * FROM patients WHERE patient_id = ANY($1) AND is_active = true`,
+            `SELECT * FROM patients WHERE patient_id = ANY($1::int[]) AND is_active = true`,
             [patientIds]
         );
-        const results = await batchCalculateRisk(patients, weatherAlerts);
-        return res.json({ success: true, data: results, count: results.length });
+
+        if (patients.length === 0) {
+            return res.json({ success: true, predictions: [], count: 0 });
+        }
+
+        // For each patient get days overdue and past defaults
+        const enriched = await Promise.all(patients.map(async (p) => {
+            const daysOverdue = p.next_pickup_date
+                ? Math.max(0, Math.floor((new Date() - new Date(p.next_pickup_date)) / (1000 * 60 * 60 * 24)))
+                : 0;
+            const { rows: def } = await db.query(
+                `SELECT COUNT(*) as count FROM defaulters WHERE patient_id = $1`, [p.patient_id]
+            );
+            return { ...p, days_overdue: daysOverdue, past_defaults: parseInt(def[0]?.count || 0) };
+        }));
+
+        // Run predictions
+        const predictions = await Promise.all(enriched.map(async (p) => {
+            const result = await calculateRiskScore(p, p.days_overdue, p.past_defaults, weatherAlerts);
+
+            // Save back to patients table
+            await db.query(
+                `UPDATE patients SET risk_score=$1, risk_level=$2, risk_factors=$3 WHERE patient_id=$4`,
+                [result.score, result.label, JSON.stringify(result.factors), p.patient_id]
+            );
+
+            return { patient_id: p.patient_id, score: result.score, label: result.label, factors: result.factors };
+        }));
+
+        return res.json({ success: true, predictions, count: predictions.length });
+
     } catch (err) {
         console.error('[predictions/batch]', err.message);
         return res.status(500).json({ success: false, message: 'Batch prediction failed.' });
     }
 });
-
 // ── POST /api/predictions/:patientId ─────────────────────────────
 router.post('/:patientId', requireClinicalRole, async (req, res) => {
     const patientId     = parseInt(req.params.patientId, 10);

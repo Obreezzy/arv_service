@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query, getClient } = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
-const { calculateRiskScore } = require('../services/riskEngine');
+const { calculateRiskScore } = require('../services/mlService');
 
 router.use(verifyToken);
 
