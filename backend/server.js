@@ -14,6 +14,7 @@ app.use(cors({
         'http://localhost:3000',
         'https://arv-service.vercel.app',        
         // 'https://arv-defaulters-system.vercel.app', 
+        'https://arv-service-mfscwl1c2-obrieltaurai-8009s-projects.vercel.app',
         process.env.FRONTEND_URL
     ].filter(Boolean),
     credentials: true
