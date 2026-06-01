@@ -10,13 +10,29 @@ const PORT = process.env.PORT || 3001;  // Changed from 5000 — Flask ML API us
 
 // Middleware
 app.use(cors({
-    origin: [
-        'http://localhost:3000',
-        'https://arv-service.vercel.app',        
-        // 'https://arv-defaulters-system.vercel.app', 
-        'https://arv-service-mfscwl1c2-obrieltaurai-8009s-projects.vercel.app',
-        process.env.FRONTEND_URL
-    ].filter(Boolean),
+    origin: function(origin, callback) {
+        if (!origin) return callback(null, true);
+
+        const allowedOrigins = [
+            'http://localhost:3000',
+            'https://arv-service.vercel.app',
+        ];
+
+        // Allow any Vercel preview URL for this project
+        if (
+            allowedOrigins.includes(origin) ||
+            origin.match(/https:\/\/arv-service.*\.vercel\.app$/)
+        ) {
+            return callback(null, true);
+        }
+
+        // Allow FRONTEND_URL env var
+        if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true
 }));
 app.use(express.json());
