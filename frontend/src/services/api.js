@@ -64,10 +64,31 @@ export const patientsAPI = {
       return response.data; 
   },
 
-  predictRisk: async (activeWeatherAlerts = []) => { 
-      const response = await api.post('/patients/predict', { activeWeatherAlerts }); 
-      return response.data; 
+  // kept for backward compat — internally delegates to predictionsAPI.batchPredict
+  predictRisk: async (patientIds = [], weatherAlerts = []) => {
+      const response = await api.post('/predictions/batch', { patientIds, weatherAlerts });
+      return response.data;
   }
+};
+
+export const predictionsAPI = {
+  // Single patient — "Run AI Risk Predictor" button on patient detail
+  runForPatient: async (patientId, weatherAlerts = []) => {
+      const response = await api.post(`/predictions/${patientId}`, { weatherAlerts });
+      return response.data;
+  },
+
+  // Bulk — scores all patients at once for the dashboard/patient list
+  batchPredict: async (patientIds = [], weatherAlerts = []) => {
+      const response = await api.post('/predictions/batch', { patientIds, weatherAlerts });
+      return response.data;
+  },
+
+  // Audit history — last 20 predictions for a patient
+  getHistory: async (patientId) => {
+      const response = await api.get(`/predictions/${patientId}/history`);
+      return response.data;
+  },
 };
 
 export const defaultersAPI = {

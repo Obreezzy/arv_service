@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Eye, Pencil, TrendingUp, UserPlus, Loader2 } from 'lucide-react';
 import './Patients.css';
-import { patientsAPI } from '../services/api';
+import { patientsAPI, predictionsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
@@ -40,23 +40,48 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
  }
  };
 
- const runPrediction = async () => {
- if (patients.length === 0) {
- showToast({ type: 'warning', message: 'No patients to analyse. Register patients first.' });
- return;
- }
- try {
- setAnalyzing(true);
- showToast({ type: 'info', message: ' Running Predictive Analysis...' });
- await patientsAPI.predictRisk([]);
- showToast({ type: 'success', message: 'Prediction Complete! Updating list...' });
- await loadPatients();
- } catch (err) {
- showToast({ type: 'error', message: 'Analysis Failed' });
- } finally {
- setAnalyzing(false);
- }
- };
+const runPrediction = async () => {
+  if (patients.length === 0) {
+    showToast({ type: 'warning', message: 'No patients to analyse. Register patients first.' });
+    return;
+  }
+  try {
+    setAnalyzing(true);
+    showToast({ type: 'info', message: '🤖 Running Predictive Analysis...' });
+
+    const patientIds   = patients.map(p => p.patient_id);
+    const weatherZones = activeAlerts.map(a => a.affectedArea);
+
+    const res = await predictionsAPI.batchPredict(patientIds, weatherZones);
+
+    // Backend returns { success, predictions: [...] }
+    const predictions = res.predictions || res.data || [];
+
+    if (predictions.length) {
+      const scoreMap = {};
+      predictions.forEach(r => { scoreMap[r.patient_id] = r; }); // fix: patient_id not patientId
+
+      setPatients(prev => prev.map(p => {
+        const pred = scoreMap[p.patient_id];
+        if (!pred) return p;
+        return {
+          ...p,
+          risk_score : pred.score,
+          risk_label : pred.label,
+        };
+      }));
+
+      showToast({ type: 'success', message: ` Prediction complete — ${predictions.length} patients scored.` });
+    } else {
+      showToast({ type: 'warning', message: 'Prediction ran but returned no results.' });
+    }
+  } catch (err) {
+    console.error('[runPrediction]', err);
+    showToast({ type: 'error', message: 'Analysis failed. Please try again.' });
+  } finally {
+    setAnalyzing(false);
+  }
+};
 
  // Strip location keywords to get the raw value 
  // "Ward 14" → "14", "Chigodora Village" → "chigodora"
@@ -105,7 +130,8 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
  const alerts = getPatientAlerts(patient);
  const boost = alerts.reduce((sum, a) => sum + a.riskBoost, 0);
  const effective = Math.min(base + boost, 100);
- const label = effective >= 50 ? 'High' : effective >= 25 ? 'Medium' : 'Low';
+ // Thresholds must match the XGBoost model: High>=75, Medium>=40, Low<40
+ const label = effective >= 75 ? 'High' : effective >= 40 ? 'Medium' : 'Low';
  return { score: effective, label, boosted: boost > 0, boost };
  };
 
