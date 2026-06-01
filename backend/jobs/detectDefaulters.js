@@ -1,6 +1,3 @@
-// backend/jobs/detectDefaulters.js
-// Automated job to detect defaulters daily
-
 const { query, getClient } = require('../config/db');
 
 const detectDefaultersJob = async () => {
@@ -16,7 +13,6 @@ const detectDefaultersJob = async () => {
         
         const gracePeriod = 3; // Days after missed pickup
 
-        // Find patients who missed their scheduled pickup date
         const missedPickups = await client.query(
             `SELECT DISTINCT ON (mp.patient_id)
                 mp.patient_id,
@@ -53,7 +49,6 @@ const detectDefaultersJob = async () => {
 
         // Flag each patient as defaulter
         for (const patient of missedPickups.rows) {
-            // Calculate risk level
             const riskLevel = calculateRiskLevel(
                 patient.days_overdue,
                 patient.previous_defaults,

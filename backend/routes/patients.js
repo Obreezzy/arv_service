@@ -6,9 +6,7 @@ const { calculateRiskScore } = require('../services/riskEngine');
 
 router.use(verifyToken);
 
-// ==========================================
-// 1. PREDICT RISK FOR ALL PATIENTS — ML Powered
-// ==========================================
+//PREDICT RISK FOR ALL PATIENTS 
 router.post('/predict', async (req, res) => {
     const activeWeatherAlerts = req.body.activeWeatherAlerts || [];
 
@@ -89,7 +87,6 @@ router.post('/predict', async (req, res) => {
                 updatedCount++;
 
             } catch (patientErr) {
-                // Log individual patient error but continue with others
                 console.error(`Risk prediction failed for patient ${patient.patient_id}:`, patientErr.message);
             }
         }
@@ -98,7 +95,7 @@ router.post('/predict', async (req, res) => {
         res.json({
             success: true,
             message: `ML risk analysis completed for ${updatedCount} patients`,
-            model: 'LR + RF Ensemble — Chikore Mission Hospital'
+            model: 'LR + RF Ensemble '
         });
 
     } catch (err) {
@@ -110,9 +107,7 @@ router.post('/predict', async (req, res) => {
     }
 });
 
-// ==========================================
-// 2. GET ALL PATIENTS
-// ==========================================
+//GET ALL PATIENTS
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
@@ -130,9 +125,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// ==========================================
-// 3. CREATE PATIENT
-// ==========================================
+//CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
         patient_number, first_name, last_name, date_of_birth, gender,
@@ -200,12 +193,12 @@ router.post('/', async (req, res) => {
 
         const newPatient = result.rows[0];
 
-        // Run initial ML risk prediction for new patient
+        
         try {
             const initialPrediction = await calculateRiskScore(
                 { ...newPatient, chronic_diseases: chronic_diseases || '' },
-                0,   // 0 days overdue — just registered
-                0,   // 0 past defaults — new patient
+                0,   
+                0,   
                 []
             );
 
@@ -258,9 +251,7 @@ router.post('/', async (req, res) => {
     }
 });
 
-// ==========================================
-// 4. GET SINGLE PATIENT
-// ==========================================
+// GET SINGLE PATIENT
 router.get('/:id', async (req, res) => {
     try {
         const result = await query('SELECT * FROM patients WHERE patient_id = $1', [req.params.id]);
@@ -272,9 +263,8 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// ==========================================
-// 5. UPDATE PATIENT
-// ==========================================
+
+//UPDATE PATIENT
 router.put('/:id', async (req, res) => {
     const {
         first_name, last_name, date_of_birth, gender, phone_number,
@@ -355,9 +345,8 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// ==========================================
+
 // HELPER
-// ==========================================
 const parseFactors = (factors) => {
     try {
         if (!factors) return [];

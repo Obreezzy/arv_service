@@ -63,7 +63,7 @@ export const patientsAPI = {
       const response = await api.put(`/patients/${id}`, patientData); 
       return response.data; 
   },
-  // ✅ UPDATED: Now accepts activeWeatherAlerts and sends them to the backend
+
   predictRisk: async (activeWeatherAlerts = []) => { 
       const response = await api.post('/patients/predict', { activeWeatherAlerts }); 
       return response.data; 

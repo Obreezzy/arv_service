@@ -1,7 +1,7 @@
 const twilio = require('twilio');
 require('dotenv').config();
 
-const DEVELOPMENT_MODE = process.env.SMS_DEV_MODE === 'true';
+const DEVELOPMENT_MODE = process.env.SMS_DEV_MODE === 'false';
 
 let client = null;
 if (!DEVELOPMENT_MODE) {

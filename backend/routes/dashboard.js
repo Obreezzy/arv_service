@@ -1,26 +1,18 @@
-// backend/routes/dashboard.js
-// Provides dashboard statistics and overview data
-
 const express = require('express');
 const { query } = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// All routes require authentication
+
 router.use(verifyToken);
 
-// ============================================
 // ROUTE 1: GET DASHBOARD OVERVIEW
-// ============================================
 
-// GET /api/dashboard/overview
-// Purpose: Get comprehensive system overview
 router.get('/overview', async (req, res) => {
     try {
         console.log('Fetching dashboard overview');
 
-        // Get all statistics in parallel
         const [
             patientStats,
             pickupStats,
@@ -35,9 +27,7 @@ router.get('/overview', async (req, res) => {
             getRecentActivity(10)
         ]);
 
-        // Calculate adherence rate: (Active Non-Defaulters / Total Active)
-        // We use patientStats.active_patients (which includes non-defaulters) 
-        // and defaulterStats.active_defaulters.
+ 
         const adherenceRate = calculateAdherenceRate(
             patientStats.active_patients,
             defaulterStats.active_defaulters
@@ -53,7 +43,7 @@ router.get('/overview', async (req, res) => {
                     active_defaulters: defaulterStats.active_defaulters,
                     adherence_rate: adherenceRate,
                     upcoming_pickups_7days: upcomingPickups.length,
-                    // Combined High Risk count for the summary banner
+                    
                     high_risk_total: (parseInt(patientStats.high_risk_patients) || 0) + 
                                    (parseInt(defaulterStats.high_risk) || 0)
                 },
@@ -76,9 +66,6 @@ router.get('/overview', async (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 2: GET PATIENT STATISTICS
-// ============================================
 
 router.get('/patients', async (req, res) => {
     try {
@@ -94,9 +81,7 @@ router.get('/patients', async (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 3: GET DEFAULTER TRENDS
-// ============================================
+
 
 router.get('/defaulter-trends', async (req, res) => {
     try {
@@ -131,9 +116,6 @@ router.get('/defaulter-trends', async (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 4: GET URGENT ACTIONS
-// ============================================
 
 router.get('/urgent-actions', async (req, res) => {
     try {
@@ -172,9 +154,7 @@ router.get('/urgent-actions', async (req, res) => {
     }
 });
 
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
+
 
 const getPatientStatistics = async () => {
     const result = await query(`
@@ -251,7 +231,7 @@ const calculateAdherenceRate = (activePatients, activeDefaulters) => {
     const total = parseInt(activePatients) || 0;
     const defaulting = parseInt(activeDefaulters) || 0;
     if (total === 0) return 0;
-    // Adherent patients are those active but NOT currently defaulting
+    
     const adherent = Math.max(0, total - defaulting);
     return Math.round((adherent / total) * 100);
 };

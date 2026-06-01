@@ -1,5 +1,3 @@
-// backend/server.js
-// Main server file
 
 const express = require('express');
 const cors = require('cors');

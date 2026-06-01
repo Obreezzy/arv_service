@@ -1,13 +1,7 @@
-// Import axios (library for making HTTP requests)
 import axios from 'axios';
 
-// Base URL of our backend
 const API_URL = 'http://localhost:5000/api';
 
-/**
- * SMS API Service
- * This file contains functions that talk to our backend SMS routes
- */
 export const smsAPI = {
   
   /**
@@ -18,18 +12,18 @@ export const smsAPI = {
    */
   sendReminder: async (defaulterId) => {
     try {
-      console.log(`📤 Sending SMS request for defaulter ${defaulterId}`);
+      console.log(` Sending SMS request for defaulter ${defaulterId}`);
       
       // Make POST request to backend
       const response = await axios.post(`${API_URL}/sms/send-reminder`, {
         defaulterId: defaulterId
       });
       
-      console.log('✅ SMS request successful:', response.data);
+      console.log(' SMS request successful:', response.data);
       return response.data;
       
     } catch (error) {
-      console.error('❌ SMS request failed:', error);
+      console.error(' SMS request failed:', error);
       throw error;
     }
   },
@@ -42,17 +36,17 @@ export const smsAPI = {
    */
   sendBulk: async (defaulterIds) => {
     try {
-      console.log(`📤 Sending bulk SMS to ${defaulterIds.length} patients`);
+      console.log(` Sending bulk SMS to ${defaulterIds.length} patients`);
       
       const response = await axios.post(`${API_URL}/sms/send-bulk`, {
         defaulterIds: defaulterIds
       });
       
-      console.log('✅ Bulk SMS request successful:', response.data);
+      console.log(' Bulk SMS request successful:', response.data);
       return response.data;
       
     } catch (error) {
-      console.error('❌ Bulk SMS request failed:', error);
+      console.error(' Bulk SMS request failed:', error);
       throw error;
     }
   },

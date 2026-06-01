@@ -159,7 +159,7 @@ function StaffForm({ onClose, onSuccess }) {
 
           </div>
 
-          {/* ── Clinic Assignment (not for admins) ── */}
+          {/* ── Clinic Assignment ── */}
           {needsClinic && (
             <div style={{ marginTop: '1.25rem' }}>
               <div style={{
@@ -167,7 +167,7 @@ function StaffForm({ onClose, onSuccess }) {
                 textTransform: 'uppercase', letterSpacing: '0.05em',
                 marginBottom: '0.75rem'
               }}>
-                🏥 Clinic Assignment
+                 Clinic Assignment
               </div>
               <div className="form-grid">
                 <div className="form-group">
@@ -215,7 +215,7 @@ function StaffForm({ onClose, onSuccess }) {
           }}>
             {isNurseRole && (
               <>
-                ✅ A <strong>Staff ID</strong> (STF-XXX) and <strong>Nurse Number</strong> (NRS-XXX)
+                 A <strong>Staff ID</strong> (STF-XXX) and <strong>Nurse Number</strong> (NRS-XXX)
                 will be auto-generated.<br />
                 When they log in, their <strong>Clinic Number</strong>, <strong>Clinic Name</strong>,
                 and <strong>Nurse Number</strong> will auto-fill and lock when recording pickups or
@@ -224,14 +224,14 @@ function StaffForm({ onClose, onSuccess }) {
             )}
             {formData.role === 'data_entry' && (
               <>
-                ✅ A <strong>Staff ID</strong> (STF-XXX) will be auto-generated.<br />
+                 A <strong>Staff ID</strong> (STF-XXX) will be auto-generated.<br />
                 Their <strong>Clinic Number</strong> and <strong>Clinic Name</strong> will auto-fill
                 when using the system. No nurse number is assigned to data entry staff.
               </>
             )}
             {isAdminRole && (
               <>
-                ✅ A <strong>Staff ID</strong> (STF-XXX) will be auto-generated for this
+                 A <strong>Staff ID</strong> (STF-XXX) will be auto-generated for this
                 administrator. Administrators are not assigned to a specific clinic.
               </>
             )}

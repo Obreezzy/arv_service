@@ -1,22 +1,18 @@
 
 const axios = require('axios');
 
-// ── Flask ML API URL ──────────────────────────────────────────────
-// Local development : http://localhost:5000
 const ML_API_URL = process.env.ML_API_URL || 'http://localhost:5000';
 
 
-// ═══════════════════════════════════════════════════════════════════
 // MAIN: calculateRiskScore
-// ═══════════════════════════════════════════════════════════════════
 
 /**
  * Calculates ARV default risk score for a single patient.
  *
- * @param {Object}   patient             - Patient object from database
- * @param {number}   daysOverdue         - Days since scheduled pickup
- * @param {number}   pastDefaults        - Number of past missed pickups
- * @param {string[]} activeWeatherAlerts - Active weather alert locations
+ * @param {Object}   patient             
+ * @param {number}   daysOverdue        
+ * @param {number}   pastDefaults        
+ * @param {string[]} activeWeatherAlerts 
  * @returns {Object} { score, label, factors }
  */
 const calculateRiskScore = async (
@@ -34,8 +30,7 @@ const calculateRiskScore = async (
 
     const result = response.data;
 
-    // ── Weather alert logic ───────────────────────────────────────
-    // Check if patient's location matches any active weather alerts
+    //Weather alert logic
     const patientLocation = (
         patient.location || patient.address || ''
     ).toLowerCase();
@@ -60,15 +55,13 @@ const calculateRiskScore = async (
 };
 
 
-// ═══════════════════════════════════════════════════════════════════
 // BATCH: Score multiple patients at once — for dashboard
-// ═══════════════════════════════════════════════════════════════════
 
 /**
  * Batch risk calculation for multiple patients.
  * More efficient than calling calculateRiskScore() in a loop.
  *
- * @param {Array} patients - Array of patient objects with days_overdue attached
+ * @param {Array} patients 
  * @returns {Array} [{ patient_id, score, label, factors }]
  */
 const batchCalculateRisk = async (patients) => {
@@ -86,9 +79,7 @@ const batchCalculateRisk = async (patients) => {
 };
 
 
-// ═══════════════════════════════════════════════════════════════════
 // HEALTH CHECK — call on server startup
-// ═══════════════════════════════════════════════════════════════════
 
 const checkMLHealth = async () => {
     try {
@@ -104,10 +95,8 @@ const checkMLHealth = async () => {
 };
 
 
-// ═══════════════════════════════════════════════════════════════════
 // HELPER: Build ML API payload from patient object
 // Maps your exact DB field names to ML API fields
-// ═══════════════════════════════════════════════════════════════════
 
 const buildMLPayload = (patient, daysOverdue, pastDefaults) => ({
     age                      : getAge(patient.date_of_birth),
@@ -125,9 +114,7 @@ const buildMLPayload = (patient, daysOverdue, pastDefaults) => ({
 });
 
 
-// ═══════════════════════════════════════════════════════════════════
 // HELPERS
-// ═══════════════════════════════════════════════════════════════════
 
 // Calculate age from date of birth
 const getAge = (dobString) => {

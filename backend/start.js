@@ -1,31 +1,15 @@
-/**
- * ARV SYSTEM STARTUP SCRIPT
- * Launches Flask ML API + Node.js backend together.
- *
- * Project structure:
- *   ARV-DEFAULTERS-SYSTEM/
- *   ├── start.js          ← this file (root level)
- *   ├── backend/
- *   │   └── server.js     ← Node.js backend
- *   └── ml_api/
- *       └── app.py        ← Flask ML API
- *
- * Usage: node start.js
- *
- * Author: Obriel Makamanzi | University of Zimbabwe
- */
 
 const { spawn } = require('child_process');
 const axios     = require('axios');
 const path      = require('path');
 
-// ── Config ────────────────────────────────────────────────────────
+//Config 
 const ML_API_PORT = 5000;
 const ML_API_URL  = `http://localhost:${ML_API_PORT}`;
 const ML_API_DIR  = path.join(__dirname, 'ml_api');
 const NODE_SCRIPT = path.join(__dirname, 'backend', 'server.js');
 
-// ── Console colours ───────────────────────────────────────────────
+
 const c = {
     reset  : '\x1b[0m',
     green  : '\x1b[32m',
@@ -45,7 +29,7 @@ const log = {
 };
 
 
-// ── Start Flask ML API ────────────────────────────────────────────
+//Start Flask ML API 
 const startFlask = () => {
     return new Promise((resolve, reject) => {
         log.info('Starting Flask ML API...');
@@ -115,7 +99,7 @@ const startFlask = () => {
 };
 
 
-// ── Start Node.js backend ─────────────────────────────────────────
+//Start Node.js backend 
 const startNode = () => {
     return new Promise((resolve, reject) => {
         log.info('Starting Node.js backend...');
@@ -123,7 +107,7 @@ const startNode = () => {
         const node = spawn('node', [NODE_SCRIPT], {
             env  : {
                 ...process.env,
-                ML_API_URL,           // pass Flask URL to Node
+                ML_API_URL,          
             },
             stdio: 'pipe'
         });
@@ -151,7 +135,6 @@ const startNode = () => {
             }
         });
 
-        // Give Node 3 seconds to boot then resolve
         setTimeout(() => {
             log.ok('Node.js backend started');
             resolve(node);
@@ -160,7 +143,6 @@ const startNode = () => {
 };
 
 
-// ── Graceful shutdown ─────────────────────────────────────────────
 const setupShutdown = (flaskProcess, nodeProcess) => {
     const shutdown = (signal) => {
         console.log('');
@@ -183,17 +165,13 @@ const setupShutdown = (flaskProcess, nodeProcess) => {
 };
 
 
-// ── Main ──────────────────────────────────────────────────────────
 const main = async () => {
 
     try {
-        // 1. Start Flask first — Node depends on it for ML predictions
         const flaskProcess = await startFlask();
 
-        // 2. Then start Node.js backend
         const nodeProcess  = await startNode();
 
-        // 3. Handle Ctrl+C cleanly — kills both
         setupShutdown(flaskProcess, nodeProcess);
 
         console.log('');

@@ -1,11 +1,8 @@
-// backend/middleware/auth.js
-// Authentication middleware for protecting routes
-
 const jwt = require('jsonwebtoken');
 
-// ============================================
+
 // VERIFY JWT TOKEN
-// ============================================
+
 const verifyToken = async (req, res, next) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -67,9 +64,9 @@ const verifyToken = async (req, res, next) => {
     }
 };
 
-// ============================================
+
 // VERIFY USER ROLE
-// ============================================
+
 const verifyRole = (allowedRoles) => {
     return (req, res, next) => {
         try {
@@ -101,9 +98,9 @@ const verifyRole = (allowedRoles) => {
     };
 };
 
-// ============================================
+
 // OPTIONAL AUTH (token not required)
-// ============================================
+
 const optionalAuth = async (req, res, next) => {
     try {
         const authHeader = req.headers['authorization'];

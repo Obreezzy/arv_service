@@ -3,10 +3,7 @@ const router = express.Router();
 const SMS_SERVICE = require('../services/sms');
 const db = require('../config/db');
 
-/**
- * TEST ROUTE
- * GET /api/sms/test
- */
+
 router.get('/test', (req, res) => {
   console.log('Test route hit!');
   res.json({
@@ -16,13 +13,12 @@ router.get('/test', (req, res) => {
   });
 });
 
-/**
- * POST /api/sms/send-reminder
- * Send SMS to ONE defaulter
- */
+
+// Send SMS to ONE defaulter
+
 router.post('/send-reminder', async (req, res) => {
   try {
-    console.log('📱 SMS send-reminder route hit!');
+    console.log(' SMS send-reminder route hit!');
     console.log('Request body:', req.body);
     
     const { defaulterId } = req.body;

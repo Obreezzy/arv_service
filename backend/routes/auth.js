@@ -1,4 +1,3 @@
-// backend/routes/auth.js
 
 const express = require('express');
 const bcrypt  = require('bcryptjs');
@@ -8,12 +7,10 @@ const { verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ============================================
+
 // HELPERS
-// ============================================
 
 const generateStaffId = async () => {
-  // Pull all numeric staff IDs, cast to int, get the max
   const result = await query(`
     SELECT COALESCE(MAX(
       CAST(REGEXP_REPLACE(staff_id, '[^0-9]', '', 'g') AS INTEGER)
@@ -50,7 +47,7 @@ router.post('/register', async (req, res) => {
 
     console.log('Registration attempt:', { username, email, role });
 
-    // ── Required fields ──
+    
     if (!username || !email || !password || !full_name || !role) {
       return res.status(400).json({
         success: false,
@@ -58,7 +55,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Email format ──
+    
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -67,7 +64,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Role ──
+    
     const validRoles = ['admin', 'healthcare_worker', 'data_entry'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
@@ -76,7 +73,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Clinic fields required for non-admins ──
     if (role !== 'admin' && !clinic_number) {
       return res.status(400).json({
         success: false,
@@ -90,7 +86,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Duplicate username ──
     const usernameCheck = await query(
       'SELECT user_id FROM users WHERE LOWER(username) = LOWER($1)',
       [username]
@@ -102,7 +97,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Duplicate email ──
     const emailCheck = await query(
       'SELECT user_id FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
@@ -114,7 +108,6 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Password length ──
     if (password.length < 6) {
       return res.status(400).json({
         success: false,
@@ -122,17 +115,16 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // ── Hash password ──
+    
     const salt          = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // ── Generate IDs using REGEXP MAX — always correct even with mixed formats ──
     const staff_id     = await generateStaffId();
     const nurse_number = role === 'healthcare_worker' ? await generateNurseNumber() : null;
 
     console.log('Generated Staff ID:', staff_id, nurse_number ? '| Nurse No: ' + nurse_number : '');
 
-    // ── Insert ──
+    // Insert 
     const result = await query(
       `INSERT INTO users (
           username, email, password_hash, full_name, role, phone_number,
@@ -177,7 +169,7 @@ router.post('/register', async (req, res) => {
   } catch (error) {
     console.error(' Registration error:', error);
 
-    // ── Catch any remaining DB unique constraint errors ──
+   
     if (error.code === '23505') {
       const detail = error.detail || '';
       if (detail.includes('staff_id')) {
@@ -214,9 +206,8 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// ============================================
+
 // LOGIN USER
-// ============================================
 
 router.post('/login', async (req, res) => {
   try {
@@ -308,9 +299,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// ============================================
+
 // GET CURRENT USER (PROTECTED)
-// ============================================
 
 router.get('/me', verifyToken, async (req, res) => {
   try {

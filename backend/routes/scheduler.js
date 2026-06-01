@@ -1,5 +1,3 @@
-// backend/routes/scheduler.js
-// API endpoints for managing scheduled jobs
 
 const express = require('express');
 const scheduler = require('../services/scheduler');
@@ -7,15 +5,9 @@ const { verifyToken, verifyRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ALL routes require the user to be logged in
 router.use(verifyToken);
 
-// ============================================
-// ROUTE 1: GET SCHEDULED JOBS STATUS (Admin Only)
-// ============================================
 
-// GET /api/scheduler/jobs
-// Purpose: Get list of all scheduled jobs and their status
 router.get('/jobs', verifyRole(['admin']), (req, res) => {
     try {
         const jobs = scheduler.getScheduledJobs();
@@ -37,12 +29,7 @@ router.get('/jobs', verifyRole(['admin']), (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 2: MANUALLY TRIGGER DEFAULTER DETECTION (Open to all staff)
-// ============================================
 
-// POST /api/scheduler/trigger/detect-defaulters
-// Purpose: Manually run defaulter detection job
 router.post('/trigger/detect-defaulters', async (req, res) => {
     try {
         console.log('Manual trigger: Defaulter Detection');
@@ -68,12 +55,9 @@ router.post('/trigger/detect-defaulters', async (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 3: MANUALLY TRIGGER REMINDERS (Open to all staff)
-// ============================================
 
-// POST /api/scheduler/trigger/send-reminders
-// Purpose: Manually send reminders
+// MANUALLY TRIGGER REMINDERS 
+
 router.post('/trigger/send-reminders', async (req, res) => {
     try {
         const { days } = req.body;
@@ -101,12 +85,9 @@ router.post('/trigger/send-reminders', async (req, res) => {
     }
 });
 
-// ============================================
-// ROUTE 4: GET SCHEDULER STATUS (Admin Only)
-// ============================================
 
-// GET /api/scheduler/status
-// Purpose: Get overall scheduler status
+// ROUTE 4: GET SCHEDULER STATUS 
+
 router.get('/status', verifyRole(['admin']), (req, res) => {
     try {
         const jobs = scheduler.getScheduledJobs();

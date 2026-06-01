@@ -1,6 +1,3 @@
-// backend/jobs/sendReminders.js
-// Automated job to send SMS reminders
-
 const { query } = require('../config/db');
 const smsService = require('../services/sms');
 
@@ -11,11 +8,6 @@ const sendRemindersJob = async (daysAhead = 3) => {
         console.log('Started:', new Date().toISOString());
         console.log('========================================\n');
 
-        // ============================================
-        // FIXED QUERY: Checks BOTH tables
-        // 1. patients table (new patients with no pickup history)
-        // 2. medication_pickups table (returning patients)
-        // ============================================
         const patients = await query(
             `SELECT DISTINCT ON (patient_id)
                 patient_id, patient_number, first_name, last_name,
@@ -56,7 +48,6 @@ const sendRemindersJob = async (daysAhead = 3) => {
             [daysAhead]
         );
 
-        // No patients found for this date
         if (patients.rows.length === 0) {
             console.log(`No patients with pickups in ${daysAhead} days`);
             console.log('\n========================================');
@@ -68,16 +59,13 @@ const sendRemindersJob = async (daysAhead = 3) => {
 
         console.log(`Found ${patients.rows.length} patients to remind\n`);
 
-        // Log who will be reminded
         patients.rows.forEach((p, i) => {
             console.log(`  ${i + 1}. ${p.first_name} ${p.last_name} (${p.patient_number}) → ${p.phone_number} | Pickup: ${p.next_pickup_date}`);
         });
 
         console.log('\n');
 
-        // ============================================
-        // Prepare SMS batch
-        // ============================================
+
         const recipients = patients.rows.map(patient => {
             const pickupDate = convertToDisplayDate(patient.next_pickup_date);
             return {
@@ -88,13 +76,12 @@ const sendRemindersJob = async (daysAhead = 3) => {
             };
         });
 
-        // Send bulk SMS
+  
         const result = await smsService.sendBulkSMS(recipients);
 
         console.log(`\nReminders sent: ${result.successful}/${result.total}`);
         console.log(`Failed: ${result.failed}`);
 
-        // Log individual results
         if (result.results) {
             result.results.forEach(r => {
                 if (r.success) {

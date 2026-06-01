@@ -2,27 +2,21 @@ const express = require('express');
 const router  = express.Router();
 const db      = require('../config/db');
 
-// ============================================
-// HELPER: Calculate next pickup date
-// ============================================
+
 const calculateNextPickupDate = (pickupDate, frequencyDays) => {
   const date = new Date(pickupDate);
   date.setDate(date.getDate() + parseInt(frequencyDays));
   return date.toISOString().split('T')[0];
 };
 
-// ============================================
-// HELPER: Age from date of birth
-// ============================================
+
 const getAge = (dob) => {
   if (!dob) return 30;
   const d = new Date(dob);
   return isNaN(d.getTime()) ? 30 : new Date().getFullYear() - d.getFullYear();
 };
 
-// ============================================
-// HELPER: Predict risk for a single patient
-// ============================================
+
 const predictRiskForPatient = (patient, history) => {
   let score   = 0;
   let factors = [];
@@ -56,9 +50,7 @@ const predictRiskForPatient = (patient, history) => {
   return { score, label, factors };
 };
 
-// ============================================
 // HELPER: Recalculate and save risk for one patient
-// ============================================
 const recalculatePatientRisk = async (patient_id) => {
   try {
     const patientRes = await db.query(
@@ -69,7 +61,7 @@ const recalculatePatientRisk = async (patient_id) => {
     if (patientRes.rows.length === 0) return;
     const patient = patientRes.rows[0];
 
-    // FIX: Count history directly from the defaulters table so it never forgets past defaults!
+    //Count history directly from the defaulters table so it never forgets past defaults!
     const historyRes = await db.query(
       `SELECT COUNT(*) AS late_pickups FROM defaulters WHERE patient_id = $1`,
       [patient_id]
@@ -90,9 +82,7 @@ const recalculatePatientRisk = async (patient_id) => {
   }
 };
 
-// ============================================
 // POST /api/pickups/record
-// ============================================
 router.post('/record', async (req, res) => {
   const client = await db.getClient();
   try {
@@ -105,7 +95,7 @@ router.post('/record', async (req, res) => {
     if (!patient_id) throw new Error('patient_id is required');
     if (!pickup_date) throw new Error('pickup_date is required');
 
-    // ── Get patient (Done BEFORE transaction so we can auto-heal safely) ──
+    //Get patient
     const patientCheck = await client.query(
       `SELECT patient_id, first_name, last_name, pickup_frequency, arv_regimen
        FROM patients WHERE patient_id = $1`,
@@ -123,7 +113,7 @@ router.post('/record', async (req, res) => {
       (new Date(computed_next_pickup) - new Date(pickup_date)) / (1000 * 60 * 60 * 24)
     );
 
-    // ── Get or Auto-Create treatment_id (Done BEFORE transaction!) ──
+    //Get or Auto-Create treatment_id
     let treatment_id = null;
     try {
       const t1 = await client.query(
@@ -135,7 +125,7 @@ router.post('/record', async (req, res) => {
       console.log('Could not query patient_treatments:', e.message);
     }
 
-    // Smart Self-Healing (Outside the BEGIN block so it doesn't poison the transaction if it fails)
+    // Smart Self-Healing 
     if (!treatment_id) {
         console.log(`Auto-creating missing treatment record for ${patient.first_name}...`);
         try {
@@ -166,12 +156,10 @@ router.post('/record', async (req, res) => {
         }
     }
 
-    // ============================================
     // START TRANSACTION (Safe now!)
-    // ============================================
     await client.query('BEGIN');
 
-    // ── Insert pickup ──
+    //Insert pickup 
     const result = await client.query(
       `INSERT INTO medication_pickups (
           patient_id, treatment_id, pickup_date, actual_pickup_date, scheduled_date, next_pickup_date,
@@ -186,13 +174,13 @@ router.post('/record', async (req, res) => {
 
     const pickup_record = result.rows[0];
 
-    // ── Update next_pickup_date on patient ──
+    //Update next_pickup_date on patient
     await client.query(
       'UPDATE patients SET next_pickup_date = $1 WHERE patient_id = $2',
       [computed_next_pickup, patient_id]
     );
 
-    // ── Remove from defaulters if applicable ──
+    //Remove from defaulters if applicable 
     await client.query(
       `UPDATE defaulters SET status = 'returned', resolved_date = CURRENT_TIMESTAMP
        WHERE patient_id = $1 AND status = 'pending'`,
@@ -223,9 +211,7 @@ router.post('/record', async (req, res) => {
   }
 });
 
-// ============================================
 // GET routes (remain unchanged)
-// ============================================
 router.post('/set-first-pickup', async (req, res) => {
   try {
     const { patient_id, first_pickup_date } = req.body;

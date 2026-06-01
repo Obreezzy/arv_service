@@ -5,12 +5,9 @@ const { verifyToken } = require('../middleware/auth');
 
 router.use(verifyToken);
 
-// ==========================================
-// 1. GET ALL DEFAULTERS (auto-detects on fetch)
-// ==========================================
+
 router.get('/', async (req, res) => {
     try {
-        // 1. AUTO-DETECT: Find NEW patients whose next_pickup_date has passed by AT LEAST 3 DAYS
         const missedPatients = await query(`
             SELECT p.patient_id, p.next_pickup_date, p.risk_level,
                    (CURRENT_DATE - p.next_pickup_date) AS days_overdue
@@ -37,7 +34,7 @@ router.get('/', async (req, res) => {
             `, [patient.patient_id, daysOverdue, riskLevel]);
         }
 
-        // 2. UPDATE DAYS OVERDUE for existing defaulters
+        
         await query(`
             UPDATE defaulters d
             SET days_overdue = (CURRENT_DATE - p.next_pickup_date)
@@ -47,14 +44,12 @@ router.get('/', async (req, res) => {
             AND p.next_pickup_date IS NOT NULL
         `);
 
-        // 3. SELF-HEALING CLEANUP: Instantly delete anyone who was accidentally added 
-        // before the 3-day mark (fixes the lingering 1-day late patients)
+        
         await query(`
             DELETE FROM defaulters 
             WHERE status = 'pending' AND days_overdue < 3
         `);
 
-        // 4. FETCH FINAL LIST
         const result = await query(`
             SELECT 
                 d.defaulter_id, d.patient_id, d.days_overdue, d.status, d.detected_date,
@@ -79,9 +74,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// ==========================================
-// 2. RESOLVE DEFAULTER STATUS
-// ==========================================
+// RESOLVE DEFAULTER STATUS
 router.put('/:id/resolve', async (req, res) => {
     const { status } = req.body;
     const defaulterId = req.params.id;

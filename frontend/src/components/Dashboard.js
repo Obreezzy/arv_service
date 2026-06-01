@@ -51,7 +51,6 @@ function Dashboard({ onNavigate, currentUser }) {
         patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length +
         defaulters.filter(d => d.risk_level?.toLowerCase() === 'medium').length;
 
-      // Total count includes everyone (active + defaulters)
       const totalSystemPatients = patients.length + defaulters.length;
 
       setStats({

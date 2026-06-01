@@ -17,7 +17,7 @@ function Login({ onLogin }) {
         const response = await authAPI.login({ email, password });
         
         if (response.success) {
-            sessionStorage.setItem('token', response.token); // 👈 changed
+            sessionStorage.setItem('token', response.token); 
             
             showToast({ type: 'success', message: `Welcome back, ${response.user.full_name}!` });
             
@@ -65,7 +65,7 @@ function Login({ onLogin }) {
           </div>
 
           <button type="submit" className="btn-login" disabled={loading}>
-            {loading ? 'Authenticating...' : 'Secure Login 🔒'}
+            {loading ? 'Authenticating...' : 'Secure Login'}
           </button>
         </form>
 
