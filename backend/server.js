@@ -114,7 +114,7 @@ app.use((err, req, res, next) => {
 scheduler.startScheduler();
 
 // ── Check ML API is online on startup ────────────────────────────
-const { checkMLHealth } = require('./services/riskEngine');
+const { checkMLHealth } = require('./services/mlService');
 checkMLHealth();
 
 // Start server
