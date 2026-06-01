@@ -12,7 +12,7 @@ const sendRemindersJob = async (daysAhead = 3) => {
             `SELECT DISTINCT ON (patient_id)
                 patient_id, patient_number, first_name, last_name,
                 phone_number, next_pickup_date
-             FROM (
+            FROM (
 
                 -- SOURCE 1: patients table (covers new patients)
                 SELECT
@@ -36,15 +36,15 @@ const sendRemindersJob = async (daysAhead = 3) => {
                     p.first_name,
                     p.last_name,
                     p.phone_number,
-                    mp.next_pickup_date
+                    p.next_pickup_date       -- ← was mp.next_pickup_date, now fixed
                 FROM patients p
                 JOIN medication_pickups mp ON p.patient_id = mp.patient_id
-                WHERE mp.next_pickup_date = CURRENT_DATE + INTERVAL '1 day' * $1
+                WHERE p.next_pickup_date = CURRENT_DATE + INTERVAL '1 day' * $1  -- ← fixed
                 AND p.is_active = true
                 AND p.phone_number IS NOT NULL
 
-             ) combined_results
-             ORDER BY patient_id, next_pickup_date DESC`,
+            ) combined_results
+            ORDER BY patient_id, next_pickup_date DESC`,
             [daysAhead]
         );
 
