@@ -256,8 +256,7 @@ const runPrediction = async () => {
  <table className="patients-table">
  <thead>
  <tr>
- <th>ID</th>
- <th>Name</th>
+<th>Patient ID</th>
  <th>Age</th>
  <th>Distance</th>
  <th>Next Pickup</th>
@@ -281,24 +280,17 @@ const runPrediction = async () => {
  key={p.patient_id}
  className={effective.boosted ? 'weather-affected-row' : ''}
  >
- <td>{p.patient_number}</td>
- <td className="fw-bold">
- <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
- {p.first_name} {p.last_name}
- {effective.boosted && (
- <span
- className="weather-warning-icon"
- title={
- 'Weather alert: ' +
- patientAlerts.map(a => a.label).join(', ') +
- ' (+' + effective.boost + '% risk)'
- }
- >
- 
- </span>
- )}
- </div>
- </td>
+<td className="fw-bold">
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+    {p.patient_number || p.art_number}
+    {effective.boosted && (
+      <span
+        className="weather-warning-icon"
+        title={'Weather alert: ' + patientAlerts.map(a => a.label).join(', ') + ' (+' + effective.boost + '% risk)'}
+      >⚠</span>
+    )}
+  </div>
+</td>
  <td>{age}</td>
  <td>
  {p.distance_from_clinic

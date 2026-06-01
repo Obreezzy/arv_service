@@ -124,6 +124,13 @@ export const smsAPI = {
   }
 };
 
+export const clinicsAPI = {
+  getClinics: async () => {
+    const response = await api.get('/patients/clinics');
+    return response.data;
+  }
+};
+
 export const schedulerAPI = {
   sendReminders: async (days = 1) => {
       const response = await api.post('/scheduler/trigger/send-reminders', { days });

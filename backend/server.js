@@ -89,7 +89,7 @@ const defaulterRoutes   = require('./routes/defaulters');
 const dashboardRoutes   = require('./routes/dashboard');
 const smsRoutes         = require('./routes/sms');
 const schedulerRoutes   = require('./routes/scheduler');
-const predictionsRoutes = require('./routes/predictions');   // ← NEW
+const predictionsRoutes = require('./routes/predictions');   
 
 const scheduler = require('./services/scheduler');
 
@@ -101,7 +101,7 @@ app.use('/api/dashboard',   dashboardRoutes);
 app.use('/api/sms',         smsRoutes);
 app.use('/api/scheduler',   schedulerRoutes);
 app.use('/api/users',       require('./routes/users'));
-app.use('/api/predictions', predictionsRoutes);             // ← NEW
+app.use('/api/predictions', predictionsRoutes);             
 
 
 // ── 404 & error handlers ──────────────────────────────────────────────────────

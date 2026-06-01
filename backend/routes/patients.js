@@ -126,6 +126,23 @@ router.get('/', async (req, res) => {
     }
 });
 
+// GET /api/clinics — returns distinct clinics from registered users
+router.get('/clinics', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT DISTINCT clinic_name, clinic_number
+      FROM users
+      WHERE clinic_name IS NOT NULL 
+        AND clinic_number IS NOT NULL
+        AND is_active = true
+      ORDER BY clinic_name ASC
+    `);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 //CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
