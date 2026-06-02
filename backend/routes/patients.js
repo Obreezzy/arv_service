@@ -33,7 +33,7 @@ router.post('/predict', async (req, res) => {
     }
 });
 
-// GET ALL PATIENTS - Now auto-formats the display ID natively
+// GET ALL PATIENTS
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
@@ -70,7 +70,7 @@ router.get('/clinics', async (req, res) => {
   }
 });
 
-// CREATE PATIENT - Now auto-generates P-XXXX ID after insertion
+// CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
         art_number, first_name, last_name, date_of_birth, gender,
@@ -110,6 +110,33 @@ router.post('/', async (req, res) => {
         else if (marital_status === 'Divorced') maritalEnc = 2;
         else if (marital_status === 'Widowed') maritalEnc = 3;
 
+        // --- DYNAMIC ART NUMBER COLLISION RESOLUTION ---
+        let finalArtNumber = art_number ? art_number.trim() : null;
+        if (!finalArtNumber) {
+            const currentYear = new Date().getFullYear().toString().slice(-2);
+            const facilityCode = clinic_number || 'UNKNOWN';
+            const randomSeq = Math.floor(1000 + Math.random() * 9000);
+            finalArtNumber = `CHP/${facilityCode}/${currentYear}/${randomSeq}`;
+        }
+
+        let isOccupied = true;
+        let protectionAttempts = 0;
+        while (isOccupied && protectionAttempts < 15) {
+            const checkRes = await query(`SELECT 1 FROM patients WHERE art_number = $1`, [finalArtNumber]);
+            if (checkRes.rows.length === 0) {
+                isOccupied = false;
+            } else {
+                protectionAttempts++;
+                const parts = finalArtNumber.split('/');
+                if (parts.length === 4) {
+                    const newSeq = Math.floor(1000 + Math.random() * 9000);
+                    finalArtNumber = `${parts[0]}/${parts[1]}/${parts[2]}/${newSeq}`;
+                } else {
+                    finalArtNumber = `${finalArtNumber}-${Math.floor(10 + Math.random() * 90)}`;
+                }
+            }
+        }
+
         const result = await query(
             `INSERT INTO patients (
                 art_number, first_name, last_name, full_name, date_of_birth, gender,
@@ -130,7 +157,7 @@ router.post('/', async (req, res) => {
                 $31,$32,$33,$34
             ) RETURNING *`,
             [
-                art_number   || `CHP/UNKNOWN/${new Date().getFullYear().toString().slice(-2)}/${Date.now()}`,
+                finalArtNumber,
                 first_name, 
                 last_name, 
                 fullName, 
@@ -169,7 +196,6 @@ router.post('/', async (req, res) => {
 
         const newPatient = result.rows[0];
 
-        // --- AUTO-GENERATE SHORT P-XXXX ID based on Primary Key ---
         const generatedPatientNumber = `P-${String(newPatient.patient_id).padStart(4, '0')}`;
         await query(
             `UPDATE patients SET patient_number = $1 WHERE patient_id = $2`,
@@ -178,7 +204,6 @@ router.post('/', async (req, res) => {
         newPatient.patient_number = generatedPatientNumber;
         newPatient.display_id = generatedPatientNumber;
 
-        // Run ML Risk Score
         try {
             const { calculateRiskScore: scoreById } = require('../services/riskEngine');
             const initialPrediction = await scoreById(newPatient.patient_id, []);
@@ -351,7 +376,6 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// HELPER
 const parseFactors = (factors) => {
     try {
         if (!factors) return [];

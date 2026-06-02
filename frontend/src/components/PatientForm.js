@@ -1,4 +1,4 @@
-// v5.1 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, added clear ID placeholder
+// v5.2 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, zero emojis
 import React, { useState } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -153,7 +153,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
   const validate = () => {
     const e = {};
-    if (!formData.art_number.trim())        e.art_number         = 'ART Number is required.';
     if (!formData.first_name.trim())        e.first_name         = 'First name is required.';
     if (!formData.last_name.trim())         e.last_name          = 'Last name is required.';
     if (!formData.date_of_birth)            e.date_of_birth      = 'Date of birth is required.';
@@ -165,7 +164,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     if (!formData.nok_name.trim())          e.nok_name           = 'Next of kin name is required.';
     if (!formData.nok_relationship.trim())  e.nok_relationship   = 'Relationship is required.';
     if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
-    if (!formData.clinic_name.trim())       e.clinic_name        = 'Facility assignment is required.';
+    if (isAdmin && !formData.clinic_name.trim()) e.clinic_name   = 'Facility assignment is required.';
 
     const phoneReg = /^\+?[0-9]{9,15}$/;
     if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g, '')))
@@ -301,33 +300,14 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               />
             </Field>
             
-            <Field id="art_number" error={errors.art_number} label="ART Number" required>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input
-                  id="art_number"
-                  name="art_number"
-                  value={formData.art_number}
-                  onChange={handleChange}
-                  placeholder={formData.clinic_number ? '' : 'Select facility first'}
-                  style={{ ...inputStyle(errors, 'art_number'), flex: 1, fontFamily: 'monospace' }}
-                />
-                {formData.clinic_number && (
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      art_number: generateArtNumber(formData.clinic_number)
-                    }))}
-                    style={{
-                      padding: '0.4rem 0.75rem', fontSize: '0.75rem', whiteSpace: 'nowrap',
-                      background: '#f0fdf4', border: '1px solid #bbf7d0',
-                      borderRadius: '6px', cursor: 'pointer', color: '#166534', fontWeight: '600'
-                    }}
-                  >
-                    Regenerate
-                  </button>
-                )}
-              </div>
+            <Field id="art_number" label="ART Number">
+              <input
+                id="art_number"
+                type="text"
+                value={isNurse && formData.art_number ? formData.art_number : "Auto-generated and unique check on save"}
+                readOnly
+                style={{ background: '#f9fafb', color: '#6b7280', fontStyle: 'italic', border: '1px dashed #d1d5db', fontFamily: 'monospace' }}
+              />
             </Field>
             
             <Field id="enrollment_date" error={errors.enrollment_date} label="Enrollment Date" required>
