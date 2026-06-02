@@ -7,7 +7,7 @@ import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
 import PatientEditForm from './PatientEditForm';
 
-// ERROR BOUNDARY
+// ── ERROR BOUNDARY ──
 class PatientsErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -45,11 +45,11 @@ class PatientsErrorBoundary extends Component {
   }
 }
 
-// MAIN COMPONENT
+// ── MAIN COMPONENT ──
 function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
-  // STATE INITIALIZATION
+  // 1. STATE INITIALIZATION
   const [patients, setPatients]               = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [analyzing, setAnalyzing]             = useState(false);
@@ -60,7 +60,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const [editingPatient, setEditingPatient]   = useState(null);
   const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  // CALLBACK DEFINITIONS
+  // 2. CALLBACK DEFINITIONS
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -99,7 +99,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
-  // USE EFFECTS
+  // 3. USE EFFECTS
   useEffect(() => { 
     setRiskFilter(initialRiskFilter || 'All'); 
   }, [initialRiskFilter]);
@@ -109,7 +109,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   }, [loadPatients]);
 
 
-  // BUSINESS LOGIC & HELPERS
+  // 4. BUSINESS LOGIC & HELPERS
   const runPrediction = async () => {
     if (!patients || patients.length === 0) {
       showToast({ type: 'warning', message: 'No patients to analyse.' });
@@ -237,7 +237,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     return matchesRisk && matchesSearch;
   });
 
-  // RENDER
+  // 5. RENDER
   return (
     <div className="patients-page">
 
@@ -318,7 +318,8 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
             <table className="patients-table">
               <thead>
                 <tr>
-                  <th>Patient ID</th>
+                  {/* Changed label from Patient ID to Patient No per request */}
+                  <th>Patient No</th>
                   <th>Age</th>
                   <th>Next Pickup</th>
                   <th>Predicted Risk</th>
@@ -453,7 +454,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   );
 }
 
-// EXPORT THE BOUNDARY WRAPPED VERSION
+// ── EXPORT THE BOUNDARY WRAPPED VERSION ──
 export default function Patients(props) {
   return (
     <PatientsErrorBoundary>
