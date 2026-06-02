@@ -6,7 +6,7 @@ const { calculateRiskScore } = require('../services/riskEngine');
 
 router.use(verifyToken);
 
-//PREDICT RISK FOR ALL PATIENTS — delegates to riskEngine which queries DB itself
+// PREDICT RISK FOR ALL PATIENTS — delegates to riskEngine which queries DB itself
 router.post('/predict', async (req, res) => {
     const weatherAlerts = req.body.weatherAlerts || req.body.activeWeatherAlerts || [];
     try {
@@ -34,7 +34,7 @@ router.post('/predict', async (req, res) => {
     }
 });
 
-//GET ALL PATIENTS
+// GET ALL PATIENTS
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
@@ -67,7 +67,7 @@ router.get('/clinics', async (req, res) => {
   }
 });
 
-//CREATE PATIENT
+// CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
         art_number, first_name, last_name, date_of_birth, gender,
@@ -81,20 +81,9 @@ router.post('/', async (req, res) => {
         chronic_score, tb_flag, pregnancy_flag,
     } = req.body;
 
+    // FIX: Extract userId as an integer instead of querying for the string name
     const userId = req.user?.id || req.user?.user_id || req.user?.userId || req.user?.sub || null;
-    let createdByName = 'Unknown';
-
-    if (userId) {
-        try {
-            const userResult = await query(`SELECT username, first_name, last_name FROM users WHERE user_id = $1`, [userId]);
-            if (userResult.rows.length > 0) {
-                const u = userResult.rows[0];
-                createdByName = (u.first_name && u.last_name) ? `${u.first_name} ${u.last_name}` : u.username;
-            }
-        } catch (e) {
-            console.error('User lookup failed:', e.message);
-        }
-    }
+    const createdById = userId ? parseInt(userId) : null;
 
     try {
         const freq = parseInt(pickup_frequency) || 30;
@@ -138,7 +127,7 @@ router.post('/', async (req, res) => {
                 enrollment_date, arv_regimen || null,
                 freq, finalPickupDate,
                 nokName, nokPhone,
-                createdByName,
+                createdById, // <--- Fixed parameter $19 (now passes Integer)
                 clinic_name   || null,
                 clinic_number || null,
                 nurse_number  || null,
@@ -220,8 +209,7 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-
-//UPDATE PATIENT
+// UPDATE PATIENT
 router.put('/:id', async (req, res) => {
     const {
         first_name, last_name, date_of_birth, gender, phone_number,
@@ -305,7 +293,6 @@ router.put('/:id', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 });
-
 
 // HELPER
 const parseFactors = (factors) => {
