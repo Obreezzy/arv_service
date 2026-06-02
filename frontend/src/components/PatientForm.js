@@ -1,4 +1,3 @@
-// v5.4 - strictly enforce string-only validation for names, blocks numbers/symbols
 import React, { useState } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -107,8 +106,8 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
     let finalValue = value;
 
-    // ACTIVE FILTER: Instantly strips numbers and special chars from names
-    if (name === 'first_name' || name === 'last_name') {
+    // ACTIVE FILTER: Instantly strips numbers and special chars from names (First, Last, and NOK)
+    if (name === 'first_name' || name === 'last_name' || name === 'nok_name') {
       finalValue = value.replace(/[^A-Za-z\s-]/g, '');
     }
 
@@ -162,13 +161,21 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.last_name = 'Last name can only contain letters.';
     }
 
+    // Strict Next of Kin Name Validation
+    if (!formData.nok_name.trim()) {
+      e.nok_name = 'Next of kin name is required.';
+    } else if (formData.nok_name.trim().length < 2) {
+      e.nok_name = 'Next of kin name must be at least 2 characters.';
+    } else if (!nameRegex.test(formData.nok_name)) {
+      e.nok_name = 'Next of kin name can only contain letters.';
+    }
+
     if (!formData.date_of_birth)            e.date_of_birth      = 'Date of birth is required.';
     if (!formData.gender)                   e.gender             = 'Gender is required.';
     if (!formData.marital_status)           e.marital_status     = 'Marital status is required.';
     if (!formData.phone_number.trim())      e.phone_number       = 'Phone number is required.';
     if (!formData.arv_regimen)              e.arv_regimen        = 'ARV Regimen is required.';
     if (!formData.who_clinical_stage)       e.who_clinical_stage = 'WHO Clinical Stage is required.';
-    if (!formData.nok_name.trim())          e.nok_name           = 'Next of kin name is required.';
     if (!formData.nok_relationship.trim())  e.nok_relationship   = 'Relationship is required.';
     if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
     if (isAdmin && !formData.clinic_name.trim()) e.clinic_name   = 'Facility assignment is required.';
