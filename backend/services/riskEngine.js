@@ -159,7 +159,7 @@ const buildRiskFactors = (f, weatherBoosted = false) => {
     if (f.has_supporter === 0)           factors.push(`No treatment supporter assigned`);
     if (weatherBoosted)                  factors.push(`Active Weather Alert in Area`);
 
-    // The Two-Pillar UI Integration: Clinical Alerts (Overrides UI without modifying score math)
+    // The Two-Pillar UI Integration: Clinical Alerts
     if (f.latest_cd4 > 0 && f.latest_cd4 < 200) {
         factors.push(`CLINICAL EMERGENCY: CD4 critically low (${f.latest_cd4})`);
     } else if (f.latest_cd4 >= 500 && f.latest_vl_suppressed === 1) {
@@ -177,16 +177,27 @@ const buildRiskFactors = (f, weatherBoosted = false) => {
     return factors.length ? factors : ['No significant risk flags identified'];
 };
 
-const saveToAuditTrail = async (client, patientId, score, label, source, features) => {
+const saveToAuditTrail = async (client, patientId, score, label, source, features, factors) => {
     try {
+        // 1. Save to the audit/history log
         await client.query(
             `INSERT INTO risk_scores
                 (patient_id, risk_score, risk_label, prediction_source, feature_snapshot, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())`,
             [patientId, score, label, source, JSON.stringify(features)]
         );
+
+        // 2. IMPORTANT FIX: Update the master patients table so it persists on refresh!
+        await client.query(
+            `UPDATE patients 
+             SET risk_score = $1, 
+                 risk_level = $2, 
+                 risk_factors = $3 
+             WHERE patient_id = $4`,
+            [score, label, JSON.stringify(factors), patientId]
+        );
     } catch (auditErr) {
-        console.error(`Audit trail write failed for patient ${patientId}:`, auditErr.message);
+        console.error(`Audit trail or patient update failed for patient ${patientId}:`, auditErr.message);
     }
 };
 
@@ -233,7 +244,9 @@ const calculateRiskScore = async (patientId, activeWeatherAlerts = []) => {
         }
         const features = rows[0];
         const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
-        await saveToAuditTrail(client, patientId, score, label, predictionSource, features);
+        
+        // Pass factors into the save function so they can be written to the master table
+        await saveToAuditTrail(client, patientId, score, label, predictionSource, features, factors);
         
         return { patientId, patient_id: patientId, score, label, factors, predictionSource, features };
     } finally {
@@ -251,7 +264,10 @@ const batchCalculateRisk = async (patientIds, activeWeatherAlerts = []) => {
         const results = await Promise.all(
             rows.map(async (features) => {
                 const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
-                await saveToAuditTrail(client, features.patient_id, score, label, predictionSource, features);
+                
+                // Pass factors into the save function
+                await saveToAuditTrail(client, features.patient_id, score, label, predictionSource, features, factors);
+                
                 return {
                     patientId        : features.patient_id,
                     patient_id       : features.patient_id,
