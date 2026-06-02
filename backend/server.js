@@ -101,7 +101,10 @@ app.use('/api/dashboard',   dashboardRoutes);
 app.use('/api/sms',         smsRoutes);
 app.use('/api/scheduler',   schedulerRoutes);
 app.use('/api/users',       require('./routes/users'));
-app.use('/api/predictions', predictionsRoutes);             
+app.use('/api/predictions', predictionsRoutes);  
+
+const labsRouter = require('./routes/labs');
+app.use('/api/labs', labsRouter);
 
 
 // ── 404 & error handlers ──────────────────────────────────────────────────────

@@ -71,4 +71,14 @@ export const schedulerAPI = {
   getStatus: async () => { const response = await api.get('/scheduler/status'); return response.data; }
 };
 
+export const labsAPI = {
+  recordResult: async (labData) => { 
+      const response = await api.post('/labs/record', labData); 
+      return response.data; 
+  },
+  getHistory: async (patientId) => { 
+      const response = await api.get(`/labs/patient/${patientId}`); return response.data; 
+  }
+};
+
 export default api;
