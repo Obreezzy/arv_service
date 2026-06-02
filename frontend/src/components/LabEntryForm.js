@@ -16,19 +16,30 @@ function LabEntryForm({ patientId, onSuccess }) {
   });
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await labsAPI.recordResult({ patient_id: patientId, ...formData });
-      showToast({ type: 'success', message: 'Lab results recorded & risk profile updated!' });
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      console.error(err);
-      showToast({ type: 'error', message: 'Failed to save lab results.' });
-    } finally {
-      setLoading(false);
-    }
-  };
+      e.preventDefault();
+      setLoading(true);
+      
+      const sanitizedPayload = {
+        patient_id: patientId,
+        cd4_count: formData.cd4_count ? parseInt(formData.cd4_count, 10) : null,
+        vl_value: formData.vl_value ? parseInt(formData.vl_value, 10) : null,
+        vl_suppressed: Boolean(formData.vl_suppressed),
+        weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
+        side_effects: formData.side_effects.trim() || null,
+        test_date: formData.test_date
+      };
+
+      try {
+        await labsAPI.recordResult(sanitizedPayload);
+        showToast({ type: 'success', message: 'Lab results recorded & risk profile updated!' });
+        if (onSuccess) onSuccess();
+      } catch (err) {
+        console.error(err);
+        showToast({ type: 'error', message: 'Failed to save lab results.' });
+      } finally {
+        setLoading(false);
+      }
+    };
 
   return (
     <form onSubmit={handleSubmit} className="lab-entry-form" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

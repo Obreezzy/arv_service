@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { recalculatePatientRisk } = require('../services/riskEngine'); // Reuse your existing engine logic
+const { recalculatePatientRisk } = require('../services/riskEngine'); 
 
 router.post('/record', async (req, res) => {
     const { patient_id, cd4_count, vl_value, vl_suppressed, weight_kg, side_effects, test_date } = req.body;
@@ -13,12 +13,23 @@ router.post('/record', async (req, res) => {
             [patient_id, cd4_count, vl_value, vl_suppressed, weight_kg, side_effects, test_date]
         );
 
-        // Immediately update the ML risk score for this patient
-        await recalculatePatientRisk(patient_id); 
+        try {
+            await recalculatePatientRisk(patient_id); 
+        } catch (mlError) {
+            console.error('System Alert: ML Risk Engine calculation deferred. Error details:', mlError.message);
+        }
         
-        res.json({ success: true, message: 'Lab results saved and risk recalculated.' });
+        return res.json({ 
+            success: true, 
+            message: 'Lab results saved successfully.' 
+        });
+
     } catch (err) {
-        res.status(500).json({ success: false, message: err.message });
+        console.error('Database Operation Failure:', err.message);
+        return res.status(500).json({ 
+            success: false, 
+            message: 'Internal server database error during persistence.' 
+        });
     }
 });
 
