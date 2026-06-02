@@ -1,12 +1,3 @@
-// backend/services/riskEngine.js
-// ARV Defaulters Management System v2
-// -----------------------------------------------------------------------------
-// Exports:
-//   calculateRiskScore(patientId, activeWeatherAlerts?)  - single patient
-//   batchCalculateRisk(patientIds, activeWeatherAlerts?) - dashboard / bulk
-//   checkMLHealth()                                      - server startup check
-// -----------------------------------------------------------------------------
-
 'use strict';
 
 const axios  = require('axios');
@@ -66,13 +57,16 @@ pickup_agg AS (
 lab_agg AS (
     SELECT
         lr.patient_id,
-        0 AS latest_cd4,
-        0 AS first_cd4,
-        0 AS cd4_improvement,
-        1.0 AS vl_sup_rate,
-        1 AS latest_vl_suppressed,
+        (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date DESC))[1] AS latest_cd4,
+        (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date ASC))[1] AS first_cd4,
+        COALESCE(
+            (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date DESC))[1] - 
+            (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date DESC))[2]
+        , 0) AS cd4_improvement,
+        COALESCE(ROUND(AVG(CASE WHEN lr.vl_suppressed = true THEN 1.0 ELSE 0.0 END)::NUMERIC, 4), 1.0) AS vl_sup_rate,
+        (ARRAY_AGG(CASE WHEN lr.vl_suppressed = true THEN 1 ELSE 0 END ORDER BY lr.test_date DESC))[1] AS latest_vl_suppressed,
         12.0 AS best_hb
-    FROM patients lr
+    FROM lab_results lr
     WHERE lr.patient_id = ANY($1::int[])
     GROUP BY lr.patient_id
 )
@@ -156,12 +150,30 @@ const scoreToLabel = (score) => {
 
 const buildRiskFactors = (f, weatherBoosted = false) => {
     const factors = [];
+    
+    // Core ML Behavioral Risk Factors
     if (f.missed_rate >= 0.3)            factors.push(`High missed pickup rate`);
     if (f.avg_days_late >= 7)            factors.push(`Average days late per pickup exceeds safe range`);
     if (f.who_clinical_stage >= 3)       factors.push(`Advanced WHO clinical stage`);
     if (f.tb_flag === 1)                 factors.push(`Active TB co-infection presence`);
     if (f.has_supporter === 0)           factors.push(`No treatment supporter assigned`);
     if (weatherBoosted)                  factors.push(`Active Weather Alert in Area`);
+
+    // The Two-Pillar UI Integration: Clinical Alerts (Overrides UI without modifying score math)
+    if (f.latest_cd4 > 0 && f.latest_cd4 < 200) {
+        factors.push(`CLINICAL EMERGENCY: CD4 critically low (${f.latest_cd4})`);
+    } else if (f.latest_cd4 >= 500 && f.latest_vl_suppressed === 1) {
+        factors.push(`Excellent Clinical Health: High CD4 & Suppressed Viral Load`);
+    }
+    
+    if (f.latest_vl_suppressed === 0) {
+        factors.push(`CLINICAL EMERGENCY: Viral Load is unsuppressed`);
+    }
+    
+    if (f.cd4_improvement < -100) {
+        factors.push(`WARNING: CD4 count has rapidly declined (Dropped by ${Math.abs(f.cd4_improvement)})`);
+    }
+
     return factors.length ? factors : ['No significant risk flags identified'];
 };
 
@@ -193,8 +205,6 @@ const scoreOnePatient = async (features, activeWeatherAlerts = []) => {
         predictionSource = 'ml_model';
     } catch (flaskErr) {
         console.error(`[riskEngine] ML Strict Mode: Flask unavailable (${flaskErr.message}).`);
-        
-        // STRICT MODE: Fail loudly instead of applying a fallback script
         throw new Error(`Strict ML Test Failed: Unable to reach or process the Python Flask API. Reason: ${flaskErr.message}`);
     }
 
