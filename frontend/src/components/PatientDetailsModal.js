@@ -48,7 +48,6 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
   const activeLabel  = prediction ? prediction.label      : (patient.risk_level  || 'Unknown');
   const activeSource = prediction ? prediction.prediction_source : null;
 
-  // Intercepts and filters out stale distance metrics from legacy rows
   const getFactors = () => {
     let rawFactors = [];
     if (prediction && prediction.factors) {
@@ -65,6 +64,7 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
       }
     }
     
+    // Cleanse structural indicators from prior system revisions
     return rawFactors.filter(factor => 
       typeof factor === 'string' && 
       !factor.toLowerCase().includes('distance') && 
@@ -95,22 +95,11 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
         </div>
 
         <div className="modal-tabs">
-          <button
-            className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            AI Overview
-          </button>
-          <button
-            className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            Pickup History
-          </button>
+          <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>AI Overview</button>
+          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Pickup History</button>
         </div>
 
         <div className="modal-body custom-scrollbar">
-
           {activeTab === 'overview' && (
             <>
               <div className="info-grid">
@@ -175,29 +164,19 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                     disabled={predicting}
                     style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}
                   >
-                    {predicting
-                      ? <><Loader size={14} className="spin" /> Running XGBoost Model...</>
-                      : <><Brain size={14} /> Run AI Risk Predictor</>
-                    }
+                    {predicting ? <><Loader size={14} className="spin" /> Running XGBoost Model...</> : <><Brain size={14} /> Run AI Risk Predictor</>}
                   </button>
 
                   {activeSource && (
                     <span style={{
-                      marginTop: '0.4rem',
-                      display: 'inline-block',
-                      fontSize: '0.72rem',
-                      padding: '2px 8px',
-                      borderRadius: '999px',
-                      backgroundColor: activeSource === 'ml_model' ? '#d1fae5' : '#fef3c7',
-                      color: activeSource === 'ml_model' ? '#065f46' : '#92400e',
+                      marginTop: '0.4rem', display: 'inline-block', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '999px',
+                      backgroundColor: activeSource === 'ml_model' ? '#d1fae5' : '#fef3c7', color: activeSource === 'ml_model' ? '#065f46' : '#92400e',
                     }}>
                       {activeSource === 'ml_model' ? 'Verified: XGBoost Model' : 'Warning: Fallback Engine'}
                     </span>
                   )}
 
-                  {predError && (
-                    <p style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.4rem' }}>{predError}</p>
-                  )}
+                  {predError && <p style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.4rem' }}>{predError}</p>}
                 </div>
 
                 <div className="risk-meter-container">
@@ -206,10 +185,7 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                     <span style={{ color: riskColor, fontWeight: 'bold' }}>{activeScore}%</span>
                   </div>
                   <div className="progress-bar-bg" style={{ marginBottom: '1.5rem' }}>
-                    <div
-                      className="progress-bar-fill"
-                      style={{ width: `${activeScore}%`, backgroundColor: riskColor }}
-                    ></div>
+                    <div className="progress-bar-fill" style={{ width: `${activeScore}%`, backgroundColor: riskColor }}></div>
                   </div>
                 </div>
 
@@ -217,24 +193,18 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                   <h4>Why is this patient at risk?</h4>
                   {activeFactors.length > 0 ? (
                     <ul className="factors-list">
-                      {activeFactors.map((factor, i) => (
-                        <li key={i}>{factor}</li>
-                      ))}
+                      {activeFactors.map((factor, i) => <li key={i}>{factor}</li>)}
                     </ul>
                   ) : (
                     <p className="no-risk">
-                      {prediction
-                        ? 'No significant risk factors detected.'
-                        : 'Click Run AI Risk Predictor to analyse this patient.'}
+                      {prediction ? 'No significant risk factors detected.' : 'Click Run AI Risk Predictor to analyse this patient.'}
                     </p>
                   )}
                 </div>
 
                 {prediction && (
                   <p style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '0.5rem' }}>
-                    Probability: {(prediction.probability * 100).toFixed(1)}% |
-                    Prediction: {prediction.prediction === 1 ? 'High Risk Vector' : 'Low Risk Vector'} |
-                    Model: {prediction.model}
+                    Probability: {(prediction.probability * 100).toFixed(1)}% | Prediction: {prediction.prediction === 1 ? 'High Risk Vector' : 'Low Risk Vector'} | Model: {prediction.model}
                   </p>
                 )}
               </div>
@@ -246,9 +216,7 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
               {loadingHistory ? (
                 <p style={{ textAlign: 'center', color: '#6b7280', padding: '2rem' }}>Loading medical history...</p>
               ) : pickups.length === 0 ? (
-                <div className="empty-history">
-                  <p>No pickups recorded for this patient yet.</p>
-                </div>
+                <div className="empty-history"><p>No pickups recorded for this patient yet.</p></div>
               ) : (
                 <div className="timeline">
                   {pickups.map((pickup, index) => {
@@ -259,9 +227,7 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                     const prevRecord           = pickups[index + 1];
                     const scheduledForThisVisit = prevRecord ? new Date(prevRecord.next_expected_date || prevRecord.next_pickup_date) : null;
                     const isLate               = scheduledForThisVisit ? actualDate > scheduledForThisVisit : false;
-                    const daysLate             = scheduledForThisVisit && isLate
-                      ? Math.floor((actualDate - scheduledForThisVisit) / (1000 * 60 * 60 * 24))
-                      : 0;
+                    const daysLate             = scheduledForThisVisit && isLate ? Math.floor((actualDate - scheduledForThisVisit) / (1000 * 60 * 60 * 24)) : 0;
 
                     return (
                       <div className="timeline-item" key={pickup.pickup_id || index}>
@@ -278,9 +244,7 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                           {scheduledForThisVisit && (
                             <p>
                               <strong>Scheduled for:</strong> {scheduledForThisVisit.toLocaleDateString('en-GB')}{' '}
-                              {isLate
-                                ? <span style={{ color: '#ef4444' }}>({daysLate} days late)</span>
-                                : <span style={{ color: '#10b981' }}>(on time)</span>}
+                              {isLate ? <span style={{ color: '#ef4444' }}>({daysLate} days late)</span> : <span style={{ color: '#10b981' }}>(on time)</span>}
                             </p>
                           )}
                           <p><strong>Next appointment:</strong> {scheduledDate.toLocaleDateString('en-GB')}</p>

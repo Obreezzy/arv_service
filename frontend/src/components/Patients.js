@@ -7,7 +7,6 @@ import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
 import PatientEditForm from './PatientEditForm';
 
-// ── ERROR BOUNDARY ──
 class PatientsErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -45,11 +44,9 @@ class PatientsErrorBoundary extends Component {
   }
 }
 
-// ── MAIN COMPONENT ──
 function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
-  // 1. STATE INITIALIZATION
   const [patients, setPatients]               = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [analyzing, setAnalyzing]             = useState(false);
@@ -60,7 +57,6 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const [editingPatient, setEditingPatient]   = useState(null);
   const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  // 2. CALLBACK DEFINITIONS
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -99,7 +95,6 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
-  // 3. USE EFFECTS
   useEffect(() => { 
     setRiskFilter(initialRiskFilter || 'All'); 
   }, [initialRiskFilter]);
@@ -108,8 +103,6 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients(); 
   }, [loadPatients]);
 
-
-  // 4. BUSINESS LOGIC & HELPERS
   const runPrediction = async () => {
     if (!patients || patients.length === 0) {
       showToast({ type: 'warning', message: 'No patients to analyse.' });
@@ -122,12 +115,18 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
       const patientIds   = patients.map(p => p.patient_id).filter(Boolean);
       const weatherZones = (activeAlerts || []).map(a => a?.affectedArea).filter(Boolean);
       const res          = await predictionsAPI.batchPredict(patientIds, weatherZones);
-      const predictions  = res?.predictions || res?.data || [];
+      
+      let predictions = [];
+      if (res && Array.isArray(res.predictions)) predictions = res.predictions;
+      else if (res && Array.isArray(res.data)) predictions = res.data;
+      else if (res && res.data && Array.isArray(res.data.data)) predictions = res.data.data;
+      else if (res && res.data && Array.isArray(res.data.predictions)) predictions = res.data.predictions;
 
       if (predictions.length) {
         const scoreMap = {};
         predictions.forEach(r => { 
-            if(r?.patient_id) scoreMap[r.patient_id] = r; 
+            const id = r?.patient_id || r?.patientId;
+            if (id) scoreMap[id] = r; 
         });
 
         setPatients(prev => prev.map(p => {
@@ -237,14 +236,12 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     return matchesRisk && matchesSearch;
   });
 
-  // 5. RENDER
   return (
     <div className="patients-page">
 
       {activeAlerts.length > 0 && (
         <div className="patients-weather-notice">
-          <strong>{activeAlerts.length} weather alert(s) active.</strong>{' '}
-          Affected patients show boosted risk scores below.
+          <strong>{activeAlerts.length} weather alert(s) active.</strong> Affected patients show boosted risk scores below.
         </div>
       )}
 
@@ -252,8 +249,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
         <div className="header-content">
           <h2 className="page-title">Patient Registry</h2>
           <p className="page-subtitle">
-            Showing: {filteredPatients.length}{' '}
-            {riskFilter !== 'All' ? riskFilter + ' Risk ' : ''}Patients
+            Showing: {filteredPatients.length} {riskFilter !== 'All' ? riskFilter + ' Risk ' : ''}Patients
           </p>
         </div>
         <div className="header-actions">
@@ -303,22 +299,19 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
             <div className="empty-state">
               <h3>No patients found</h3>
               <p>
-                {searchQuery
-                  ? `No results match "${searchQuery}".`
-                  : `No patients matching "${riskFilter}" risk filter.`}
+                {searchQuery ? `No results match "${searchQuery}".` : `No patients matching "${riskFilter}" risk filter.`}
               </p>
               <button
                 className="btn-show-all"
                 onClick={() => { setRiskFilter('All'); setSearchQuery(''); }}
               >
-                Clear Filters &amp; Show All
+                Clear Filters and Show All
               </button>
             </div>
           ) : (
             <table className="patients-table">
               <thead>
                 <tr>
-                  {/* Changed label from Patient ID to Patient No per request */}
                   <th>Patient No</th>
                   <th>Age</th>
                   <th>Next Pickup</th>
@@ -345,20 +338,14 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                   const patientAlerts = getPatientAlerts(p);
 
                   return (
-                    <tr key={p.patient_id}
-                      className={effective.boosted ? 'weather-affected-row' : ''}>
-
+                    <tr key={p.patient_id} className={effective.boosted ? 'weather-affected-row' : ''}>
                       <td className="fw-bold">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           {p.display_id || 'UNKNOWN'}
                           {effective.boosted && (
                             <span
                               className="weather-warning-icon"
-                              title={
-                                'Weather alert: ' +
-                                patientAlerts.map(a => a?.label || 'Alert').join(', ') +
-                                ' (+' + effective.boost + '% risk)'
-                              }
+                              title={'Weather alert: ' + patientAlerts.map(a => a?.label || 'Alert').join(', ') + ' (+' + effective.boost + '% risk)'}
                             >[!]</span>
                           )}
                         </div>
@@ -381,19 +368,12 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                       <td>
                         <div className="risk-meter-wrapper">
                           <div className="risk-track">
-                            <div
-                              className={'risk-fill ' + riskClass}
-                              style={{ width: effective.score + '%' }}
-                            />
+                            <div className={'risk-fill ' + riskClass} style={{ width: effective.score + '%' }} />
                           </div>
-                          <span className={'risk-score-text ' + riskClass}>
-                            {effective.score}%
-                          </span>
+                          <span className={'risk-score-text ' + riskClass}>{effective.score}%</span>
                         </div>
                         {effective.boosted && (
-                          <div className="weather-boost-tag">
-                            +{effective.boost}% weather
-                          </div>
+                          <div className="weather-boost-tag">+{effective.boost}% weather</div>
                         )}
                       </td>
 
@@ -405,19 +385,10 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
 
                       <td>
                         <div className="action-buttons">
-                          <button
-                            className="btn-icon view"
-                            title="View Details"
-                            onClick={() => setSelectedPatient(p)}
-                          ><Eye size={15} /></button>
-                          <button
-                            className="btn-icon edit"
-                            title="Edit Patient"
-                            onClick={() => setEditingPatient(p)}
-                          ><Pencil size={15} /></button>
+                          <button className="btn-icon view" title="View Details" onClick={() => setSelectedPatient(p)}><Eye size={15} /></button>
+                          <button className="btn-icon edit" title="Edit Patient" onClick={() => setEditingPatient(p)}><Pencil size={15} /></button>
                         </div>
                       </td>
-
                     </tr>
                   );
                 })}
@@ -428,33 +399,18 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
       </div>
 
       {showModal && (
-        <PatientFormModal
-          onClose={handleCloseModal}
-          onSuccess={handlePatientSaved}
-          currentUser={currentUser}
-        />
+        <PatientFormModal onClose={handleCloseModal} onSuccess={handlePatientSaved} currentUser={currentUser} />
       )}
-
       {selectedPatient && (
-        <PatientDetailsModal
-          patient={selectedPatient}
-          onClose={handleCloseDetails}
-          onEdit={handleEditFromDetails}
-        />
+        <PatientDetailsModal patient={selectedPatient} onClose={handleCloseDetails} onEdit={handleEditFromDetails} />
       )}
-
       {editingPatient && (
-        <PatientEditForm
-          patient={editingPatient}
-          onClose={handleCloseEdit}
-          onSuccess={handleEditSaved}
-        />
+        <PatientEditForm patient={editingPatient} onClose={handleCloseEdit} onSuccess={handleEditSaved} />
       )}
     </div>
   );
 }
 
-// ── EXPORT THE BOUNDARY WRAPPED VERSION ──
 export default function Patients(props) {
   return (
     <PatientsErrorBoundary>

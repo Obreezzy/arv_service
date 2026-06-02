@@ -59,22 +59,7 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
    if (wholeNumFields.includes(name) && !wholeNumberOnly.test(value)) return;
    if (phoneFields.includes(name) && !phoneChars.test(value)) return;
 
-   if (name === 'date_of_birth' && value) {
-     const year = new Date(value).getFullYear();
-     if (year < 1946 || year > 2018) return;
-   }
-
    setFormData({ ...formData, [name]: value });
- };
-
- const handleDobBlur = (e) => {
-   const value = e.target.value;
-   if (!value) return;
-   const year = parseInt(value.split('-')[0], 10);
-   if (year < 1946 || year > 2018) {
-     setFormData(prev => ({ ...prev, date_of_birth: '' }));
-     setError('Date of birth must be between 1946 and 2018');
-   }
  };
 
  const validateForm = () => {
@@ -91,27 +76,14 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
    if (!formData.phone_number) return fail('Phone number is required');
    if (!phoneRegex.test(formData.phone_number)) return fail('Phone number format is invalid');
 
-   if (formData.alternative_phone && !phoneRegex.test(formData.alternative_phone))
-     return fail('Alternative phone format is invalid');
-   if (formData.ward && !wholeNumberOnly.test(formData.ward))
-     return fail('Ward must be a whole number');
-   if (formData.province && !lettersOnly.test(formData.province))
-     return fail('Province must contain letters only');
-   if (formData.district && !lettersOnly.test(formData.district))
-     return fail('District must contain letters only');
-   if (formData.village && !lettersOnly.test(formData.village))
-     return fail('Village must contain letters only');
-   if (formData.headman && !lettersOnly.test(formData.headman))
-     return fail('Headman name must contain letters only');
-   if (formData.emergency_contact_name && !lettersOnly.test(formData.emergency_contact_name))
-     return fail('Emergency contact name must contain letters only');
-   if (formData.emergency_contact_phone && !phoneRegex.test(formData.emergency_contact_phone))
-     return fail('Emergency contact phone format is invalid');
-
-   const dob = new Date(formData.date_of_birth);
-   const today = new Date();
-   if (dob >= today) return fail('Date of birth must be in the past');
-   if (dob < new Date('1946-01-01')) return fail('Date of birth cannot be before 1946');
+   if (formData.alternative_phone && !phoneRegex.test(formData.alternative_phone)) return fail('Alternative phone format is invalid');
+   if (formData.ward && !wholeNumberOnly.test(formData.ward)) return fail('Ward must be a whole number');
+   if (formData.province && !lettersOnly.test(formData.province)) return fail('Province must contain letters only');
+   if (formData.district && !lettersOnly.test(formData.district)) return fail('District must contain letters only');
+   if (formData.village && !lettersOnly.test(formData.village)) return fail('Village must contain letters only');
+   if (formData.headman && !lettersOnly.test(formData.headman)) return fail('Headman name must contain letters only');
+   if (formData.emergency_contact_name && !lettersOnly.test(formData.emergency_contact_name)) return fail('Emergency contact name must contain letters only');
+   if (formData.emergency_contact_phone && !phoneRegex.test(formData.emergency_contact_phone)) return fail('Emergency contact phone format is invalid');
 
    setError(null);
    return null;
@@ -121,7 +93,7 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
    e.preventDefault();
    const validationError = validateForm();
    if (validationError) {
-     showToast({ type: 'error', message: validationError, duration: 4000 });
+     showToast({ type: 'error', message: validationError });
      return;
    }
 
@@ -131,40 +103,23 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
    try {
      const payload = {
        ...formData,
-       marital_status: formData.marital_status,
-       treatment_supporter: formData.treatment_supporter,
        who_clinical_stage: parseInt(formData.who_clinical_stage) || 2,
-       art_start_date: formData.art_start_date || null,
-       next_pickup_date: formData.next_pickup_date || patient.next_pickup_date || null,
        pickup_frequency: parseInt(formData.pickup_frequency) || 30,
        chronic_score: parseInt(formData.chronic_score) || 0,
-       tb_flag: formData.tb_flag,
-       pregnancy_flag: formData.pregnancy_flag
      };
 
      const patientId = patient.patient_id || patient.id;
      const response = await patientsAPI.updatePatient(patientId, payload);
 
      setSuccess(true);
-     const patientName = `${formData.first_name} ${formData.last_name}`;
-
-     showToast({ type: 'success', message: `${patientName}'s profile has been securely updated`, duration: 5000 });
-     addNotification({
-       type: 'patient', title: 'Patient Profile Updated',
-       message: `${patientName} (${formData.patient_number}) record synced`,
-       showToast: false
-     });
-
      setTimeout(() => {
        if (onSuccess) onSuccess(response);
        if (onClose) onClose();
      }, 2000);
 
    } catch (err) {
-     const errorMessage = err.response?.data?.message || err.response?.data?.error || 'Failed to update patient profile.';
-     setError(errorMessage);
+     setError(err.response?.data?.message || 'Failed to update profile.');
      setLoading(false);
-     showToast({ type: 'error', message: errorMessage, duration: 5000 });
    }
  };
 
@@ -173,7 +128,7 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
      <div className="form-overlay">
        <div className="form-modal success-modal">
          <h2>Update Complete</h2>
-         <p>{formData.first_name} {formData.last_name}'s record parameters are updated.</p>
+         <p>Patient record parameters updated successfully.</p>
        </div>
      </div>
    );
@@ -187,26 +142,19 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
          <button className="close-button" onClick={onClose}><X size={18} /></button>
        </div>
 
-       {error && (
-         <div className="form-error"><span>System Refusal:</span> {error}</div>
-       )}
+       {error && <div className="form-error"><span>System Refusal:</span> {error}</div>}
 
        <form onSubmit={handleSubmit} className="patient-form">
-
          <div className="form-section">
            <h3 className="section-title"><User size={16} /> Patient Identification</h3>
            <div className="form-row">
              <div className="form-group">
                <label>Patient Number</label>
-               <input type="text" name="patient_number" value={formData.patient_number}
-                 readOnly style={{ backgroundColor: '#f3f4f6' }} />
-               <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>Patient number cannot be changed</small>
+               <input type="text" name="patient_number" value={formData.patient_number} readOnly style={{ backgroundColor: '#f3f4f6' }} />
              </div>
              <div className="form-group">
                <label>Enrollment Date</label>
-               <input type="date" name="enrollment_date" value={formData.enrollment_date}
-                 readOnly style={{ backgroundColor: '#f3f4f6' }} />
-               <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>Enrollment date cannot be changed</small>
+               <input type="date" name="enrollment_date" value={formData.enrollment_date} readOnly style={{ backgroundColor: '#f3f4f6' }} />
              </div>
            </div>
          </div>
@@ -216,22 +164,18 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
            <div className="form-row">
              <div className="form-group">
                <label>First Name <span className="required">*</span></label>
-               <input type="text" name="first_name" value={formData.first_name}
-                 onChange={handleChange} placeholder="Enter first name" required />
+               <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} required />
              </div>
              <div className="form-group">
                <label>Last Name <span className="required">*</span></label>
-               <input type="text" name="last_name" value={formData.last_name}
-                 onChange={handleChange} placeholder="Enter last name" required />
+               <input type="text" name="last_name" value={formData.last_name} onChange={handleChange} required />
              </div>
            </div>
 
            <div className="form-row">
              <div className="form-group">
                <label>Date of Birth <span className="required">*</span></label>
-               <input type="date" name="date_of_birth" value={formData.date_of_birth}
-                 onChange={handleChange} onBlur={handleDobBlur}
-                 min="1946-01-01" max="2018-12-31" required />
+               <input type="date" name="date_of_birth" value={formData.date_of_birth} onChange={handleChange} required />
              </div>
              <div className="form-group">
                <label>Gender <span className="required">*</span></label>
@@ -256,21 +200,18 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
              </div>
              <div className="form-group">
                <label>ART Start Date</label>
-               <input type="date" name="art_start_date" value={formData.art_start_date}
-                 onChange={handleChange} />
+               <input type="date" name="art_start_date" value={formData.art_start_date} onChange={handleChange} />
              </div>
            </div>
 
            <div className="form-row">
              <div className="form-group">
                <label>Phone Number <span className="required">*</span></label>
-               <input type="tel" name="phone_number" value={formData.phone_number}
-                 onChange={handleChange} placeholder="+263771234567" required />
+               <input type="tel" name="phone_number" value={formData.phone_number} onChange={handleChange} required />
              </div>
              <div className="form-group">
                <label>Alternative Phone</label>
-               <input type="tel" name="alternative_phone" value={formData.alternative_phone}
-                 onChange={handleChange} placeholder="+263712345678" />
+               <input type="tel" name="alternative_phone" value={formData.alternative_phone} onChange={handleChange} />
              </div>
            </div>
          </div>
@@ -280,37 +221,31 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
            <div className="form-row">
              <div className="form-group">
                <label>Province</label>
-               <input type="text" name="province" value={formData.province}
-                 onChange={handleChange} placeholder="e.g. Manicaland" />
+               <input type="text" name="province" value={formData.province} onChange={handleChange} />
              </div>
              <div className="form-group">
                <label>District</label>
-               <input type="text" name="district" value={formData.district}
-                 onChange={handleChange} placeholder="e.g. Chipinge" />
+               <input type="text" name="district" value={formData.district} onChange={handleChange} />
              </div>
            </div>
            <div className="form-row">
              <div className="form-group">
                <label>Ward</label>
-               <input type="text" name="ward" value={formData.ward}
-                 onChange={handleChange} placeholder="e.g. Ward 9" />
+               <input type="text" name="ward" value={formData.ward} onChange={handleChange} />
              </div>
              <div className="form-group">
                <label>Village</label>
-               <input type="text" name="village" value={formData.village}
-                 onChange={handleChange} placeholder="e.g. Checheche" />
+               <input type="text" name="village" value={formData.village} onChange={handleChange} />
              </div>
            </div>
            <div className="form-group">
              <label>Headman / Sabhuku</label>
-             <input type="text" name="headman" value={formData.headman}
-               onChange={handleChange} placeholder="e.g. Headman Chikwanda" />
+             <input type="text" name="headman" value={formData.headman} onChange={handleChange} />
            </div>
          </div>
 
          <div className="form-section">
            <h3 className="section-title"><Heart size={16} /> Medical Parameters</h3>
-
            <div className="form-row">
              <div className="form-group">
                <label>ARV Regimen</label>
@@ -374,26 +309,19 @@ function PatientEditForm({ patient, onClose, onSuccess }) {
            <div className="form-row">
              <div className="form-group">
                <label>Emergency Contact Name</label>
-               <input type="text" name="emergency_contact_name" value={formData.emergency_contact_name}
-                 onChange={handleChange} placeholder="Contact person name" />
+               <input type="text" name="emergency_contact_name" value={formData.emergency_contact_name} onChange={handleChange} />
              </div>
              <div className="form-group">
                <label>Emergency Contact Phone</label>
-               <input type="tel" name="emergency_contact_phone" value={formData.emergency_contact_phone}
-                 onChange={handleChange} placeholder="+263771234567" />
+               <input type="tel" name="emergency_contact_phone" value={formData.emergency_contact_phone} onChange={handleChange} />
              </div>
            </div>
          </div>
 
          <div className="form-actions">
-           <button type="button" className="cancel-button" onClick={onClose} disabled={loading}>
-             Cancel
-           </button>
-           <button type="submit" className="submit-button" disabled={loading}>
-             {loading ? 'Updating...' : 'Save Changes'}
-           </button>
+           <button type="button" className="cancel-button" onClick={onClose} disabled={loading}>Cancel</button>
+           <button type="submit" className="submit-button" disabled={loading}>{loading ? 'Updating...' : 'Save Changes'}</button>
          </div>
-
        </form>
      </div>
    </div>

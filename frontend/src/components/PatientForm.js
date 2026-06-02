@@ -23,20 +23,6 @@ const FACILITIES = [
 ];
 
 const today = new Date().toISOString().split('T')[0];
-const currentYear = new Date().getFullYear().toString().slice(-2);
-
-const generateArtNumber = (facilityCode) => {
-  if (!facilityCode) return '';
-  const seq = String(Math.floor(1000 + Math.random() * 9000));
-  return `CHP/${facilityCode}/${currentYear}/${seq}`;
-};
-
-const addDays = (dateStr, days) => {
-  if (!dateStr || !days) return '';
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + parseInt(days));
-  return d.toISOString().split('T')[0];
-};
 
 const Field = ({ id, label, required, hint, error, children }) => (
   <div className="form-group">
@@ -84,7 +70,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
   const nurseNumber  = currentUser?.nurse_number  || '';
 
   const [formData, setFormData] = useState({
-    art_number:          isNurse && nurseCode ? generateArtNumber(nurseCode) : '',
+    art_number:          '',
     enrollment_date:     today,
     first_name:          '',
     last_name:           '',
@@ -106,7 +92,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     pregnancy_flag:      false,
     treatment_supporter: false,
     pickup_frequency:    '30',
-    next_pickup_date:    addDays(today, 30),
+    next_pickup_date:    '',
     nok_name:            '',
     nok_relationship:    '',
     nok_phone:           '',
@@ -119,37 +105,27 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
 
-    // STRICT INTERCEPTION: Reject non-numeric characters instantly for the ward field
+    // FIXED: Blocks non-numeric keys immediately on type within the Ward block field
     if (name === 'ward' && value !== '') {
       const numericOnly = /^\d*$/;
       if (!numericOnly.test(value)) return;
     }
 
-    setFormData(prev => {
-      const updated = { ...prev, [name]: type === 'checkbox' ? checked : value };
-
-      if (name === 'enrollment_date' || name === 'pickup_frequency') {
-        const base = name === 'enrollment_date' ? value : prev.enrollment_date;
-        const freq = name === 'pickup_frequency' ? value  : prev.pickup_frequency;
-        updated.next_pickup_date = addDays(base, freq);
-      }
-
-      return updated;
-    });
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleFacilitySelect = (facility) => {
-    const artNum = generateArtNumber(facility.code);
     setFormData(prev => ({
       ...prev,
       clinic_name:   facility.name,
       clinic_number: facility.code,
-      art_number:    artNum,
-      next_pickup_date: addDays(prev.enrollment_date, prev.pickup_frequency),
     }));
     setClinicSearch(facility.name);
     setShowDropdown(false);
-    setErrors(prev => ({ ...prev, clinic_name: '', art_number: '' }));
+    setErrors(prev => ({ ...prev, clinic_name: '' }));
   };
 
   const filteredFacilities = FACILITIES.filter(f =>
@@ -172,7 +148,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
     if (isAdmin && !formData.clinic_name.trim()) e.clinic_name   = 'Facility assignment is required.';
 
-    // Ward number format validation fallback check
     if (formData.ward && !/^\d+$/.test(formData.ward)) {
       e.ward = 'Ward parameter must contain whole numbers only.';
     }
@@ -180,10 +155,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     const phoneReg = /^\+?[0-9]{9,15}$/;
     if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g, '')))
       e.phone_number = 'Enter a valid phone number e.g. +263771234567';
-    if (formData.alternative_phone && !phoneReg.test(formData.alternative_phone.replace(/\s/g, '')))
-      e.alternative_phone = 'Enter a valid phone number.';
-    if (formData.nok_phone && !phoneReg.test(formData.nok_phone.replace(/\s/g, '')))
-      e.nok_phone = 'Enter a valid phone number.';
 
     if (formData.date_of_birth) {
       const yr = new Date(formData.date_of_birth).getFullYear();
@@ -245,7 +216,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                         const v = e.target.value;
                         setClinicSearch(v);
                         setShowDropdown(true);
-                        setFormData(prev => ({ ...prev, clinic_name: v, clinic_number: '', art_number: '' }));
+                        setFormData(prev => ({ ...prev, clinic_name: v, clinic_number: '' }));
                         setErrors(prev => ({ ...prev, clinic_name: '' }));
                       }}
                       onFocus={() => setShowDropdown(true)}
@@ -298,7 +269,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </>
           )}
 
-          {/* ── PATIENT IDENTIFICATION ── */}
           <Section title="Patient Identification" />
           <div className="form-grid">
             <Field id="assigned_id_placeholder" label="System Patient ID">
@@ -315,7 +285,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               <input
                 id="art_number"
                 type="text"
-                value={isNurse && formData.art_number ? formData.art_number : "Auto-generated and unique check on save"}
+                value="Auto-generated and unique check on save"
                 readOnly
                 style={{ background: '#f9fafb', color: '#6b7280', fontStyle: 'italic', border: '1px dashed #d1d5db', fontFamily: 'monospace' }}
               />
@@ -332,7 +302,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* ── PERSONAL INFORMATION ── */}
           <Section title="Personal Information" />
           <div className="form-grid">
             <Field id="first_name" error={errors.first_name} label="First Name" required>
@@ -383,7 +352,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* ── LOCATION ── */}
           <Section title="Location" />
           <div className="form-grid">
             <Field id="province" label="Province">
@@ -408,7 +376,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* ── CLINICAL INFORMATION ── */}
           <Section title="Clinical Information" />
           <div className="form-grid">
             <Field id="art_start_date" label="ART Start Date">
@@ -438,10 +405,8 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 <option value="Other">Other</option>
               </select>
             </Field>
-            <Field id="chronic_score" label="Chronic Condition Score"
-              hint="Used directly in ML risk model">
-              <select id="chronic_score" name="chronic_score"
-                value={formData.chronic_score} onChange={handleChange}>
+            <Field id="chronic_score" label="Chronic Condition Score" hint="Used directly in ML risk model">
+              <select id="chronic_score" name="chronic_score" value={formData.chronic_score} onChange={handleChange}>
                 <option value="0">0 — None</option>
                 <option value="1">1 — Mild</option>
                 <option value="2">2 — Moderate</option>
@@ -458,31 +423,24 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               { name: 'pregnancy_flag',      label: 'Pregnancy' },
               { name: 'treatment_supporter', label: 'Has Treatment Supporter' },
             ].map(({ name, label }) => (
-              <label key={name} style={{
-                display: 'flex', alignItems: 'center', gap: '0.5rem',
-                cursor: 'pointer', fontSize: '0.9rem'
-              }}>
-                <input type="checkbox" name={name}
-                  checked={formData[name]} onChange={handleChange} />
+              <label key={name} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                <input type="checkbox" name={name} checked={formData[name]} onChange={handleChange} />
                 {label}
               </label>
             ))}
           </div>
 
-          {/* ── MEDICATION PICKUP ── */}
           <Section title="Medication Pickup" />
           <div className="form-grid">
             <Field id="pickup_frequency" label="Pickup Frequency">
-              <select id="pickup_frequency" name="pickup_frequency"
-                value={formData.pickup_frequency} onChange={handleChange}>
+              <select id="pickup_frequency" name="pickup_frequency" value={formData.pickup_frequency} onChange={handleChange}>
                 <option value="30">Monthly (30 days)</option>
                 <option value="60">Every 2 Months (60 days)</option>
                 <option value="90">Every 3 Months (90 days)</option>
                 <option value="180">Every 6 Months (180 days)</option>
               </select>
             </Field>
-            <Field id="next_pickup_date" label="Next Pickup Date"
-              hint={`Auto-calculated: Enrollment date + ${formData.pickup_frequency} days`}>
+            <Field id="next_pickup_date" label="Next Pickup Date" hint={`Auto-calculated: Enrollment date + ${formData.pickup_frequency} days`}>
               <input
                 id="next_pickup_date"
                 type="date"
@@ -493,18 +451,13 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* ── NEXT OF KIN ── */}
           <Section title="Next of Kin" />
           <div className="form-grid">
             <Field id="nok_name" error={errors.nok_name} label="Full Name" required>
-              <input id="nok_name" name="nok_name" value={formData.nok_name}
-                onChange={handleChange} placeholder="Full name of next of kin"
-                style={inputStyle(errors, 'nok_name')} autoComplete="off" />
+              <input id="nok_name" name="nok_name" value={formData.nok_name} onChange={handleChange} placeholder="Full name of next of kin" style={inputStyle(errors, 'nok_name')} autoComplete="off" />
             </Field>
             <Field id="nok_relationship" error={errors.nok_relationship} label="Relationship" required>
-              <select id="nok_relationship" name="nok_relationship"
-                value={formData.nok_relationship} onChange={handleChange}
-                style={inputStyle(errors, 'nok_relationship')}>
+              <select id="nok_relationship" name="nok_relationship" value={formData.nok_relationship} onChange={handleChange} style={inputStyle(errors, 'nok_relationship')}>
                 <option value="">Select relationship</option>
                 <option value="Spouse">Spouse</option>
                 <option value="Parent">Parent</option>
@@ -516,45 +469,14 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               </select>
             </Field>
             <Field id="nok_phone" error={errors.nok_phone} label="Phone Number" required>
-              <input id="nok_phone" name="nok_phone" value={formData.nok_phone}
-                onChange={handleChange} placeholder="+263771234567"
-                style={inputStyle(errors, 'nok_phone')} />
+              <input id="nok_phone" name="nok_phone" value={formData.nok_phone} onChange={handleChange} placeholder="+263771234567" style={inputStyle(errors, 'nok_phone')} />
             </Field>
           </div>
 
-          {isNurse && (
-            <>
-              <Section title="Facility Assignment" />
-              <div style={{
-                background: '#f8fafc', border: '1px solid #e2e8f0',
-                borderRadius: '8px', padding: '1rem',
-                display: 'flex', gap: '1rem', flexWrap: 'wrap'
-              }}>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Facility</div>
-                  <div style={{ fontWeight: '600' }}>{nurseClinic || '—'}</div>
-                </div>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Facility Code</div>
-                  <div style={{ fontFamily: 'monospace' }}>{nurseCode || '—'}</div>
-                </div>
-                <div style={{ flex: 1, minWidth: '140px' }}>
-                  <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Nurse Number</div>
-                  <div style={{ fontFamily: 'monospace', color: '#166534' }}>{nurseNumber || '—'}</div>
-                </div>
-              </div>
-            </>
-          )}
-
           <div className="modal-footer" style={{ marginTop: '1.5rem' }}>
-            <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Registering...' : 'Register Patient'}
-            </button>
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
+            <button type="submit" className="btn-primary" disabled={loading}>{loading ? 'Registering...' : 'Register Patient'}</button>
           </div>
-
         </form>
       </div>
     </div>
