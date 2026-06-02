@@ -111,17 +111,17 @@ router.post('/', async (req, res) => {
                 created_by, clinic_name, clinic_number, nurse_number,
                 marital_status, treatment_supporter,
                 who_clinical_stage, art_start_date,
-                chronic_score, tb_flag, pregnancy_flag
+                chronic_score, tb_flag, pregnancy_flag, gender_m
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,$16,$17,$18,
-                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
+                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31
             ) RETURNING *`,
             [
                 art_number   || `CHP/UNKNOWN/${new Date().getFullYear().toString().slice(-2)}/${Date.now()}`,
                 first_name, 
                 last_name, 
-                fullName, // $4 mapped to full_name
+                fullName, 
                 date_of_birth, 
                 gender,
                 phone_number, 
@@ -147,7 +147,8 @@ router.post('/', async (req, res) => {
                 art_start_date || null,
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
-                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false, // $30
+                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
+                gender === 'M' // $31 -> satisfies gender_m NOT NULL constraint
             ]
         );
 
@@ -232,7 +233,6 @@ router.put('/:id', async (req, res) => {
     const nokName  = nok_name  || emergency_contact_name  || null;
     const nokPhone = nok_phone || emergency_contact_phone || null;
     
-    // COMBINE for updates as well so it stays synced
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
 
     try {
@@ -247,12 +247,12 @@ router.put('/:id', async (req, res) => {
                 clinic_name=$18, clinic_number=$19, nurse_number=$20,
                 marital_status=$21, treatment_supporter=$22,
                 who_clinical_stage=$23, art_start_date=$24,
-                chronic_score=$25, tb_flag=$26, pregnancy_flag=$27
-             WHERE patient_id=$28 RETURNING *`,
+                chronic_score=$25, tb_flag=$26, pregnancy_flag=$27, gender_m=$28
+             WHERE patient_id=$29 RETURNING *`,
             [
                 first_name, 
                 last_name, 
-                fullName, // $3 mapped to full_name
+                fullName, 
                 date_of_birth, 
                 gender,
                 phone_number, 
@@ -277,7 +277,8 @@ router.put('/:id', async (req, res) => {
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                req.params.id, // $28
+                gender === 'M', // $28 -> satisfies gender_m NOT NULL constraint
+                req.params.id,  // $29
             ]
         );
 
