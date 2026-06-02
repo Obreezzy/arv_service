@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Component } from 'react';
 import { Search, Eye, Pencil, UserPlus } from 'lucide-react';
 import './Patients.css';
 import { patientsAPI, predictionsAPI } from '../services/api';
@@ -7,7 +7,46 @@ import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
 import PatientEditForm from './PatientEditForm';
 
-function Patients({ initialRiskFilter = 'All', currentUser }) {
+// ── ERROR BOUNDARY: Prevents the "White Screen of Death" ──
+class PatientsErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Patients Component Crash:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', margin: '2rem', background: '#fee2e2', border: '2px solid #ef4444', borderRadius: '8px', color: '#991b1b' }}>
+          <h2 style={{ marginTop: 0 }}>🚨 React Render Crash Detected</h2>
+          <p>The Patients page crashed. Please check the error below to find the exact cause:</p>
+          <pre style={{ background: '#f87171', color: 'white', padding: '1rem', borderRadius: '4px', overflowX: 'auto', fontSize: '14px' }}>
+            {this.state.error && this.state.error.toString()}
+          </pre>
+          <details style={{ marginTop: '1rem', cursor: 'pointer' }}>
+            <summary style={{ fontWeight: 'bold' }}>View Component Stack Trace</summary>
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '12px', marginTop: '0.5rem', opacity: 0.8 }}>
+              {this.state.errorInfo && this.state.errorInfo.componentStack}
+            </pre>
+          </details>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ── MAIN COMPONENT ──
+function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
   const [patients, setPatients]               = useState([]);
@@ -33,7 +72,6 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
       setLoading(true);
       const res = await patientsAPI.getAllPatients();
       
-      // Aggressive fallback to prevent .map or .filter crashes if API shape changes
       let dataArr = [];
       if (Array.isArray(res)) dataArr = res;
       else if (res && Array.isArray(res.data)) dataArr = res.data;
@@ -42,13 +80,12 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
       setPatients(dataArr);
     } catch (err) {
       console.error('Error loading patients:', err);
-      setPatients([]); // Always ensure state is an array
+      setPatients([]); 
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // ── Stable modal callbacks — defined once, never recreated ──────────
   const handleOpenModal    = useCallback(() => setShowModal(true),  []);
   const handleCloseModal   = useCallback(() => setShowModal(false), []);
   const handlePatientSaved = useCallback(() => {
@@ -70,7 +107,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
 
   const runPrediction = async () => {
     if (!patients || patients.length === 0) {
-      showToast({ type: 'warning', message: 'No patients to analyse. Register patients first.' });
+      showToast({ type: 'warning', message: 'No patients to analyse.' });
       return;
     }
     try {
@@ -284,7 +321,6 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
                 {filteredPatients.map(p => {
                   if (!p) return null;
                   
-                  // Safe Date parsing
                   let age = 'N/A';
                   if (p.date_of_birth) {
                       const dob = new Date(p.date_of_birth);
@@ -381,7 +417,6 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
         </div>
       </div>
 
-      {/* ── Modals — stable callbacks, no remount on keystroke ── */}
       {showModal && (
         <PatientFormModal
           onClose={handleCloseModal}
@@ -405,9 +440,15 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
           onSuccess={handleEditSaved}
         />
       )}
-
     </div>
   );
 }
 
-export default Patients;
+// ── EXPORT THE BOUNDARY WRAPPED VERSION ──
+export default function Patients(props) {
+  return (
+    <PatientsErrorBoundary>
+      <PatientsContent {...props} />
+    </PatientsErrorBoundary>
+  );
+}
