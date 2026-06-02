@@ -27,7 +27,7 @@ class PatientsErrorBoundary extends Component {
     if (this.state.hasError) {
       return (
         <div style={{ padding: '2rem', margin: '2rem', background: '#fee2e2', border: '2px solid #ef4444', borderRadius: '8px', color: '#991b1b' }}>
-          <h2 style={{ marginTop: 0 }}>🚨 React Render Crash Detected</h2>
+          <h2 style={{ marginTop: 0 }}>System Error: React Render Crash Detected</h2>
           <p>The Patients page crashed. Please check the error below to find the exact cause:</p>
           <pre style={{ background: '#f87171', color: 'white', padding: '1rem', borderRadius: '4px', overflowX: 'auto', fontSize: '14px' }}>
             {this.state.error && this.state.error.toString()}
@@ -60,7 +60,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const [editingPatient, setEditingPatient]   = useState(null);
   const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  // 2. CALLBACK DEFINITIONS (Must be above useEffects to prevent TDZ ReferenceErrors)
+  // 2. CALLBACK DEFINITIONS
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -99,7 +99,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
-  // 3. USE EFFECTS (Safe to call loadPatients now)
+  // 3. USE EFFECTS
   useEffect(() => { 
     setRiskFilter(initialRiskFilter || 'All'); 
   }, [initialRiskFilter]);
@@ -117,7 +117,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     }
     try {
       setAnalyzing(true);
-      showToast({ type: 'info', message: '🤖 Running Predictive Analysis...' });
+      showToast({ type: 'info', message: 'Running Predictive Analysis...' });
 
       const patientIds   = patients.map(p => p.patient_id).filter(Boolean);
       const weatherZones = (activeAlerts || []).map(a => a?.affectedArea).filter(Boolean);
@@ -224,12 +224,14 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                         (effective.label || '').toLowerCase() === safeRiskFilter.toLowerCase();
                         
     const s = (searchQuery || '').toLowerCase();
+    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();
+    
     const matchesSearch =
       (p.patient_number || '').toLowerCase().includes(s) ||
-      (p.art_number || '').toLowerCase().includes(s) ||
       (p.phone_number || '').toLowerCase().includes(s) ||
       (p.first_name || '').toLowerCase().includes(s) ||
-      (p.last_name || '').toLowerCase().includes(s);
+      (p.last_name || '').toLowerCase().includes(s) ||
+      fullName.includes(s);
       
     return matchesRisk && matchesSearch;
   });
@@ -284,7 +286,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
             onClick={runPrediction}
             disabled={analyzing || patients.length === 0}
           >
-            <span className="icon">{analyzing ? '⏳' : '🤖'}</span>
+            <span className="icon">{analyzing ? 'Wait' : 'Run'}</span>
             {analyzing ? 'Analyzing...' : 'Predict Risks'}
           </button>
 
@@ -346,7 +348,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
 
                       <td className="fw-bold">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {p.patient_number || p.art_number || 'UNKNOWN'}
+                          {p.patient_number || 'UNKNOWN'}
                           {effective.boosted && (
                             <span
                               className="weather-warning-icon"
@@ -355,7 +357,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                                 patientAlerts.map(a => a?.label || 'Alert').join(', ') +
                                 ' (+' + effective.boost + '% risk)'
                               }
-                            >⚠</span>
+                            >[!]</span>
                           )}
                         </div>
                       </td>
@@ -365,8 +367,8 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                       <td>
                         {p.next_pickup_date ? (
                           <span className={'pickup-badge pickup-' + pickupStatus}>
-                            {pickupStatus === 'overdue' && '⚠ '}
-                            {pickupStatus === 'soon'    && '⏰ '}
+                            {pickupStatus === 'overdue' && 'Overdue: '}
+                            {pickupStatus === 'soon'    && 'Due Soon: '}
                             {formatDate(p.next_pickup_date)}
                           </span>
                         ) : (
