@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+// v5.6 - Added active phone number validation and auto-calculation for next pickup date
+import React, { useState, useEffect } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 
@@ -100,15 +101,35 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     nurse_number:        isNurse ? nurseNumber  : '',
   });
 
+  // Automatically calculate the Next Pickup Date whenever Enrollment Date or Frequency changes
+  useEffect(() => {
+    if (formData.enrollment_date && formData.pickup_frequency) {
+      const date = new Date(formData.enrollment_date);
+      if (!isNaN(date.getTime())) {
+        date.setDate(date.getDate() + parseInt(formData.pickup_frequency, 10));
+        const formattedDate = date.toISOString().split('T')[0];
+        
+        if (formData.next_pickup_date !== formattedDate) {
+          setFormData(prev => ({ ...prev, next_pickup_date: formattedDate }));
+        }
+      }
+    }
+  }, [formData.enrollment_date, formData.pickup_frequency]);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
 
     let finalValue = value;
 
-    // ACTIVE FILTER: Instantly strips numbers and special chars from names (First, Last, and NOK)
+    // ACTIVE FILTER: Instantly strips numbers and special chars from names
     if (name === 'first_name' || name === 'last_name' || name === 'nok_name') {
       finalValue = value.replace(/[^A-Za-z\s-]/g, '');
+    }
+
+    // ACTIVE FILTER: Instantly strips letters from phone numbers (allows only digits, plus, and spaces)
+    if (name === 'phone_number' || name === 'alternative_phone' || name === 'nok_phone') {
+      finalValue = value.replace(/[^\d+\s]/g, '');
     }
 
     // ACTIVE FILTER: Blocks non-numeric keys immediately on type within the Ward field
@@ -142,6 +163,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
   const validate = () => {
     const e = {};
     const nameRegex = /^[A-Za-z\s-]+$/;
+    const phoneReg = /^\+?[0-9]{9,15}$/;
 
     // Strict First Name Validation
     if (!formData.first_name.trim()) {
@@ -170,23 +192,36 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.nok_name = 'Next of kin name can only contain letters.';
     }
 
+    // Phone Number Validation
+    if (!formData.phone_number.trim()) {
+      e.phone_number = 'Phone number is required.';
+    } else if (!phoneReg.test(formData.phone_number.replace(/\s/g, ''))) {
+      e.phone_number = 'Enter a valid phone number e.g. +263771234567';
+    }
+
+    // Next of Kin Phone Validation
+    if (!formData.nok_phone.trim()) {
+      e.nok_phone = 'Next of kin phone is required.';
+    } else if (!phoneReg.test(formData.nok_phone.replace(/\s/g, ''))) {
+      e.nok_phone = 'Enter a valid phone number e.g. +263771234567';
+    }
+
+    // Alternative Phone Validation (Optional, but checked if filled)
+    if (formData.alternative_phone.trim() !== '' && !phoneReg.test(formData.alternative_phone.replace(/\s/g, ''))) {
+      e.alternative_phone = 'Enter a valid phone number e.g. +263771234567';
+    }
+
     if (!formData.date_of_birth)            e.date_of_birth      = 'Date of birth is required.';
     if (!formData.gender)                   e.gender             = 'Gender is required.';
     if (!formData.marital_status)           e.marital_status     = 'Marital status is required.';
-    if (!formData.phone_number.trim())      e.phone_number       = 'Phone number is required.';
     if (!formData.arv_regimen)              e.arv_regimen        = 'ARV Regimen is required.';
     if (!formData.who_clinical_stage)       e.who_clinical_stage = 'WHO Clinical Stage is required.';
     if (!formData.nok_relationship.trim())  e.nok_relationship   = 'Relationship is required.';
-    if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
     if (isAdmin && !formData.clinic_name.trim()) e.clinic_name   = 'Facility assignment is required.';
 
     if (formData.ward && !/^\d+$/.test(formData.ward)) {
       e.ward = 'Ward parameter must contain whole numbers only.';
     }
-
-    const phoneReg = /^\+?[0-9]{9,15}$/;
-    if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g, '')))
-      e.phone_number = 'Enter a valid phone number e.g. +263771234567';
 
     if (formData.date_of_birth) {
       const yr = new Date(formData.date_of_birth).getFullYear();
