@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
-const { recalculatePatientRisk } = require('../services/riskEngine'); 
 
 router.post('/record', async (req, res) => {
     const { patient_id, cd4_count, vl_value, vl_suppressed, weight_kg, side_effects, test_date } = req.body;
@@ -14,9 +13,12 @@ router.post('/record', async (req, res) => {
         );
 
         try {
-            await recalculatePatientRisk(patient_id); 
-        } catch (mlError) {
-            console.error('System Alert: ML Risk Engine calculation deferred. Error details:', mlError.message);
+            const { recalculatePatientRisk } = require('../services/riskEngine'); 
+            if (recalculatePatientRisk && typeof recalculatePatientRisk === 'function') {
+                await recalculatePatientRisk(patient_id); 
+            }
+        } catch (mlSandboxError) {
+            console.error('System Notice: ML engine integration deferred, error logs:', mlSandboxError.message);
         }
         
         return res.json({ 
@@ -25,10 +27,10 @@ router.post('/record', async (req, res) => {
         });
 
     } catch (err) {
-        console.error('Database Operation Failure:', err.message);
+        console.error('Fatal Database Engine Error:', err.message);
         return res.status(500).json({ 
             success: false, 
-            message: 'Internal server database error during persistence.' 
+            message: 'Failed to persist records inside database context.' 
         });
     }
 });
