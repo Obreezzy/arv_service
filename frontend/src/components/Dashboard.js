@@ -20,7 +20,7 @@ function Dashboard({ onNavigate, currentUser }) {
     highRisk: 0, mediumRisk: 0, adherenceRate: 0
   });
   const [loading, setLoading]                 = useState(true);
-  const [mlStatus, setMlStatus]               = useState('checking'); // New: ML Status tracking
+  const [mlStatus, setMlStatus]               = useState('checking');
   const [sendingSMS, setSendingSMS]           = useState(false);
   const [showPickupForm, setShowPickupForm]   = useState(false);
   const [showPatientForm, setShowPatientForm] = useState(false);
@@ -30,7 +30,7 @@ function Dashboard({ onNavigate, currentUser }) {
     fetchDashboardData(); 
   }, []);
 
-  // New: ML Health Check Polling
+  // AI Health Check Polling
   useEffect(() => {
     const checkMlHealth = async () => {
       try {
@@ -40,9 +40,8 @@ function Dashboard({ onNavigate, currentUser }) {
         setMlStatus('offline');
       }
     };
-
     checkMlHealth();
-    const interval = setInterval(checkMlHealth, 30000); // Check every 30 seconds
+    const interval = setInterval(checkMlHealth, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -54,29 +53,25 @@ function Dashboard({ onNavigate, currentUser }) {
         defaultersAPI.getAllDefaulters()
       ]);
       
-      const patients   = patientsRes.patients   || patientsRes.data   || [];
-      const defaulters = defaultersRes.defaulters || defaultersRes.data || [];
+      const patients   = (patientsRes.patients || patientsRes.data || []);
+      const defaulters = (defaultersRes.defaulters || defaultersRes.data || []);
       
-      const activePatients = patients.filter(p => p.is_active !== false).length;
+      // Calculate metrics from current state
+      const activePatientsList = patients.filter(p => p.is_active === true);
+      const activeCount = activePatientsList.length;
+      const totalSystemPatients = patients.length; 
 
-      const predictedHighRisk = 
-        patients.filter(p => p.risk_level?.toLowerCase() === 'high').length +
-        defaulters.filter(d => d.risk_level?.toLowerCase() === 'high').length;
-
-      const predictedMediumRisk = 
-        patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length +
-        defaulters.filter(d => d.risk_level?.toLowerCase() === 'medium').length;
-
-      const totalSystemPatients = patients.length + defaulters.length;
+      const highRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'high').length;
+      const mediumRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length;
 
       setStats({
         totalPatients: totalSystemPatients, 
-        activePatients: activePatients + defaulters.length,
+        activePatients: activeCount,
         activeDefaulters: defaulters.length,
-        highRisk: predictedHighRisk, 
-        mediumRisk: predictedMediumRisk,
-        adherenceRate: (activePatients + defaulters.length) > 0
-          ? Math.round((activePatients / (activePatients + defaulters.length)) * 100) : 0
+        highRisk: highRiskCount, 
+        mediumRisk: mediumRiskCount,
+        adherenceRate: totalSystemPatients > 0
+          ? Math.round((activeCount / totalSystemPatients) * 100) : 0
       });
       
       setLoading(false);
@@ -88,10 +83,10 @@ function Dashboard({ onNavigate, currentUser }) {
 
   const handleSendReminders = async () => {
     setSendingSMS(true);
-    showToast({ type: 'info', message: ' Sending reminder SMS...' });
+    showToast({ type: 'info', message: 'Sending reminder SMS...' });
     try {
       await schedulerAPI.sendReminders(1);
-      showToast({ type: 'success', message: ' Reminder SMS sent successfully!' });
+      showToast({ type: 'success', message: 'Reminder SMS sent successfully!' });
     } catch (err) {
       showToast({ type: 'error', message: 'Failed to send SMS reminders' });
     } finally {
@@ -113,12 +108,9 @@ function Dashboard({ onNavigate, currentUser }) {
   };
 
   const adherenceChartData = {
-    labels: ['Adherent', 'Defaulting'],
+    labels: ['Active', 'Defaulters'],
     datasets: [{ 
-        data: [
-            Math.max(0, stats.activePatients - stats.activeDefaulters), 
-            stats.activeDefaulters
-        ], 
+        data: [stats.activePatients, stats.activeDefaulters], 
         backgroundColor: ['#10b981', '#ef4444'], 
         borderWidth: 0 
     }]
@@ -149,7 +141,7 @@ function Dashboard({ onNavigate, currentUser }) {
       </div>
 
       <div className="ai-section">
-        <h3 className="section-title"> AI Risk Predictions</h3>
+        <h3 className="section-title">AI Risk Predictions</h3>
         <div className="ai-cards-container">
           <div className="ai-alert-card high-risk">
             <div className="alert-header"><AlertTriangle size={20} color="#ef4444" /><h4>High Risk Candidates</h4></div>
@@ -161,7 +153,6 @@ function Dashboard({ onNavigate, currentUser }) {
             <div className="alert-body"><span className="big-number orange">{stats.mediumRisk}</span><p>Patients requiring monitoring to prevent default.</p></div>
             <button className="btn-action orange" onClick={() => onNavigate ? onNavigate('patients', 'Medium') : null}>Review Patients</button>
           </div>
-          {/* Dynamic AI Engine Status Card */}
           <div className="ai-alert-card system-ok">
             <div className="alert-header">
                 <Activity size={20} color={mlStatus === 'online' ? '#3b82f6' : '#ef4444'} />
