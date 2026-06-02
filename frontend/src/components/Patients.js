@@ -10,30 +10,43 @@ import PatientEditForm from './PatientEditForm';
 function Patients({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
-  const [patients, setPatients]           = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [analyzing, setAnalyzing]         = useState(false);
-  const [showModal, setShowModal]         = useState(false);
-  const [riskFilter, setRiskFilter]       = useState(initialRiskFilter);
-  const [searchQuery, setSearchQuery]     = useState('');
+  const [patients, setPatients]               = useState([]);
+  const [loading, setLoading]                 = useState(true);
+  const [analyzing, setAnalyzing]             = useState(false);
+  const [showModal, setShowModal]             = useState(false);
+  const [riskFilter, setRiskFilter]           = useState(initialRiskFilter || 'All');
+  const [searchQuery, setSearchQuery]         = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [editingPatient, setEditingPatient]   = useState(null);
-  const [activeAlerts, setActiveAlerts]   = useState([]);
+  const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  useEffect(() => { setRiskFilter(initialRiskFilter); }, [initialRiskFilter]);
-  useEffect(() => { loadPatients(); }, [loadPatients]);
+  useEffect(() => { 
+    setRiskFilter(initialRiskFilter || 'All'); 
+  }, [initialRiskFilter]);
+  
+  useEffect(() => { 
+    loadPatients(); 
+  }, [loadPatients]);
 
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
       const res = await patientsAPI.getAllPatients();
-      setPatients(res.data || []);
+      
+      // Aggressive fallback to prevent .map or .filter crashes if API shape changes
+      let dataArr = [];
+      if (Array.isArray(res)) dataArr = res;
+      else if (res && Array.isArray(res.data)) dataArr = res.data;
+      else if (res && Array.isArray(res.patients)) dataArr = res.patients;
+      
+      setPatients(dataArr);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading patients:', err);
+      setPatients([]); // Always ensure state is an array
     } finally {
       setLoading(false);
     }
-  }, []);  // no deps — patientsAPI is module-level, never changes
+  }, []);
 
   // ── Stable modal callbacks — defined once, never recreated ──────────
   const handleOpenModal    = useCallback(() => setShowModal(true),  []);
@@ -49,14 +62,14 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
     setEditingPatient(p);
   }, []);
   const handleCloseEdit    = useCallback(() => setEditingPatient(null), []);
-  const handleSearchChange = useCallback((e) => setSearchQuery(e.target.value), []);
+  const handleSearchChange = useCallback((e) => setSearchQuery(e.target.value || ''), []);
   const handleEditSaved = useCallback(() => {
     setEditingPatient(null);
     loadPatients();
   }, [loadPatients]);
 
   const runPrediction = async () => {
-    if (patients.length === 0) {
+    if (!patients || patients.length === 0) {
       showToast({ type: 'warning', message: 'No patients to analyse. Register patients first.' });
       return;
     }
@@ -64,14 +77,16 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
       setAnalyzing(true);
       showToast({ type: 'info', message: '🤖 Running Predictive Analysis...' });
 
-      const patientIds   = patients.map(p => p.patient_id);
-      const weatherZones = activeAlerts.map(a => a.affectedArea);
+      const patientIds   = patients.map(p => p.patient_id).filter(Boolean);
+      const weatherZones = (activeAlerts || []).map(a => a?.affectedArea).filter(Boolean);
       const res          = await predictionsAPI.batchPredict(patientIds, weatherZones);
-      const predictions  = res.predictions || res.data || [];
+      const predictions  = res?.predictions || res?.data || [];
 
       if (predictions.length) {
         const scoreMap = {};
-        predictions.forEach(r => { scoreMap[r.patient_id] = r; });
+        predictions.forEach(r => { 
+            if(r?.patient_id) scoreMap[r.patient_id] = r; 
+        });
 
         setPatients(prev => prev.map(p => {
           const pred = scoreMap[p.patient_id];
@@ -97,14 +112,15 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
       .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
 
   const getPatientAlerts = (patient) => {
-    if (!activeAlerts.length) return [];
+    if (!activeAlerts || !activeAlerts.length || !patient) return [];
+    
     const pWard     = stripLocationKeywords(String(patient.ward     || ''));
     const pVillage  = stripLocationKeywords(String(patient.village  || ''));
     const pDistrict = stripLocationKeywords(String(patient.district || ''));
     const pHeadman  = stripLocationKeywords(String(patient.headman  || ''));
 
     return activeAlerts.filter(alert => {
-      const a = stripLocationKeywords(alert.affectedArea);
+      const a = stripLocationKeywords(alert?.affectedArea);
       if (!a) return false;
       return (pWard     && (pWard === a || a === pWard)) ||
              (pVillage  && (pVillage.includes(a)  || a.includes(pVillage)))  ||
@@ -114,16 +130,19 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
   };
 
   const getEffectiveRisk = (patient) => {
+    if (!patient) return { score: 0, label: 'Low', boosted: false, boost: 0 };
+    
     const base    = parseFloat(patient.risk_score) || 0;
     const alerts  = getPatientAlerts(patient);
-    const boost   = alerts.reduce((sum, a) => sum + a.riskBoost, 0);
+    const boost   = alerts.reduce((sum, a) => sum + (a?.riskBoost || 0), 0);
     const effective = Math.min(base + boost, 100);
     const label   = effective >= 75 ? 'High' : effective >= 40 ? 'Medium' : 'Low';
+    
     return { score: effective, label, boosted: boost > 0, boost };
   };
 
   const getRiskClass = (label) => {
-    switch (label?.toLowerCase()) {
+    switch ((label || '').toLowerCase()) {
       case 'high':   return 'risk-high';
       case 'medium': return 'risk-medium';
       default:       return 'risk-low';
@@ -133,6 +152,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Not Set';
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'Invalid Date';
     return String(d.getDate()).padStart(2, '0') + '-' +
            String(d.getMonth() + 1).padStart(2, '0') + '-' +
            d.getFullYear();
@@ -140,23 +160,35 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
 
   const getPickupStatus = (dateStr) => {
     if (!dateStr) return null;
-    const today  = new Date(); today.setHours(0, 0, 0, 0);
-    const pickup = new Date(dateStr); pickup.setHours(0, 0, 0, 0);
-    const diff   = Math.ceil((pickup - today) / (1000 * 60 * 60 * 24));
+    const pickup = new Date(dateStr);
+    if (isNaN(pickup.getTime())) return null;
+    
+    const today  = new Date(); 
+    today.setHours(0, 0, 0, 0);
+    pickup.setHours(0, 0, 0, 0);
+    
+    const diff = Math.ceil((pickup - today) / (1000 * 60 * 60 * 24));
     if (diff < 0)  return 'overdue';
     if (diff <= 3) return 'soon';
     return 'normal';
   };
 
   const filteredPatients = patients.filter(p => {
-    const effective    = getEffectiveRisk(p);
-    const matchesRisk  = riskFilter === 'All' ||
-                         effective.label.toLowerCase() === riskFilter.toLowerCase();
-    const s            = searchQuery.toLowerCase();
+    if (!p) return false;
+    
+    const effective = getEffectiveRisk(p);
+    const safeRiskFilter = riskFilter || 'All';
+    const matchesRisk = safeRiskFilter === 'All' || 
+                        (effective.label || '').toLowerCase() === safeRiskFilter.toLowerCase();
+                        
+    const s = (searchQuery || '').toLowerCase();
     const matchesSearch =
-      (p.patient_number?.toLowerCase() || '').includes(s) ||
-      (p.art_number?.toLowerCase()     || '').includes(s) ||
-      (p.phone_number?.toLowerCase()   || '').includes(s);
+      (p.patient_number || '').toLowerCase().includes(s) ||
+      (p.art_number || '').toLowerCase().includes(s) ||
+      (p.phone_number || '').toLowerCase().includes(s) ||
+      (p.first_name || '').toLowerCase().includes(s) ||
+      (p.last_name || '').toLowerCase().includes(s);
+      
     return matchesRisk && matchesSearch;
   });
 
@@ -184,7 +216,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
             <input
               type="text"
               className="search-input"
-              placeholder="Search ID or phone..."
+              placeholder="Search ID, Name, Phone..."
               value={searchQuery}
               onChange={handleSearchChange}
             />
@@ -250,9 +282,17 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
               </thead>
               <tbody>
                 {filteredPatients.map(p => {
-                  const age           = p.date_of_birth
-                    ? new Date().getFullYear() - new Date(p.date_of_birth).getFullYear()
-                    : 'N/A';
+                  if (!p) return null;
+                  
+                  // Safe Date parsing
+                  let age = 'N/A';
+                  if (p.date_of_birth) {
+                      const dob = new Date(p.date_of_birth);
+                      if (!isNaN(dob.getTime())) {
+                          age = new Date().getFullYear() - dob.getFullYear();
+                      }
+                  }
+                  
                   const effective     = getEffectiveRisk(p);
                   const riskClass     = getRiskClass(effective.label);
                   const pickupStatus  = getPickupStatus(p.next_pickup_date);
@@ -264,13 +304,13 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
 
                       <td className="fw-bold">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {p.patient_number || p.art_number}
+                          {p.patient_number || p.art_number || 'UNKNOWN'}
                           {effective.boosted && (
                             <span
                               className="weather-warning-icon"
                               title={
                                 'Weather alert: ' +
-                                patientAlerts.map(a => a.label).join(', ') +
+                                patientAlerts.map(a => a?.label || 'Alert').join(', ') +
                                 ' (+' + effective.boost + '% risk)'
                               }
                             >⚠</span>
