@@ -1,4 +1,4 @@
-// v5.3 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, zero emojis, numbers-only ward
+// v5.4 - strictly enforce string-only validation for names, blocks numbers/symbols
 import React, { useState } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -105,7 +105,14 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
 
-    // FIXED: Blocks non-numeric keys immediately on type within the Ward block field
+    let finalValue = value;
+
+    // ACTIVE FILTER: Instantly strips numbers and special chars from names
+    if (name === 'first_name' || name === 'last_name') {
+      finalValue = value.replace(/[^A-Za-z\s-]/g, '');
+    }
+
+    // ACTIVE FILTER: Blocks non-numeric keys immediately on type within the Ward field
     if (name === 'ward' && value !== '') {
       const numericOnly = /^\d*$/;
       if (!numericOnly.test(value)) return;
@@ -113,7 +120,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
     setFormData(prev => ({ 
       ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
+      [name]: type === 'checkbox' ? checked : finalValue 
     }));
   };
 
@@ -135,8 +142,26 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
   const validate = () => {
     const e = {};
-    if (!formData.first_name.trim())        e.first_name         = 'First name is required.';
-    if (!formData.last_name.trim())         e.last_name          = 'Last name is required.';
+    const nameRegex = /^[A-Za-z\s-]+$/;
+
+    // Strict First Name Validation
+    if (!formData.first_name.trim()) {
+      e.first_name = 'First name is required.';
+    } else if (formData.first_name.trim().length < 2) {
+      e.first_name = 'First name must be at least 2 characters.';
+    } else if (!nameRegex.test(formData.first_name)) {
+      e.first_name = 'First name can only contain letters.';
+    }
+
+    // Strict Last Name Validation
+    if (!formData.last_name.trim()) {
+      e.last_name = 'Last name is required.';
+    } else if (formData.last_name.trim().length < 2) {
+      e.last_name = 'Last name must be at least 2 characters.';
+    } else if (!nameRegex.test(formData.last_name)) {
+      e.last_name = 'Last name can only contain letters.';
+    }
+
     if (!formData.date_of_birth)            e.date_of_birth      = 'Date of birth is required.';
     if (!formData.gender)                   e.gender             = 'Gender is required.';
     if (!formData.marital_status)           e.marital_status     = 'Marital status is required.';
