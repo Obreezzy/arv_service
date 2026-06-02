@@ -21,9 +21,9 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
   const [activeAlerts, setActiveAlerts]   = useState([]);
 
   useEffect(() => { setRiskFilter(initialRiskFilter); }, [initialRiskFilter]);
-  useEffect(() => { loadPatients(); }, []);
+  useEffect(() => { loadPatients(); }, [loadPatients]);
 
-  const loadPatients = async () => {
+  const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
       const res = await patientsAPI.getAllPatients();
@@ -33,7 +33,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);  // no deps — patientsAPI is module-level, never changes
 
   // ── Stable modal callbacks — defined once, never recreated ──────────
   const handleOpenModal    = useCallback(() => setShowModal(true),  []);
@@ -41,18 +41,18 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
   const handlePatientSaved = useCallback(() => {
     setShowModal(false);
     loadPatients();
-  }, []);
+  }, [loadPatients]);
 
   const handleCloseDetails = useCallback(() => setSelectedPatient(null), []);
   const handleEditFromDetails = useCallback((p) => {
     setSelectedPatient(null);
     setEditingPatient(p);
   }, []);
-  const handleCloseEdit = useCallback(() => setEditingPatient(null), []);
+  const handleSearchChange = useCallback((e) => setSearchQuery(e.target.value), []);
   const handleEditSaved = useCallback(() => {
     setEditingPatient(null);
     loadPatients();
-  }, []);
+  }, [loadPatients]);
 
   const runPrediction = async () => {
     if (patients.length === 0) {
@@ -185,7 +185,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
               className="search-input"
               placeholder="Search ID or phone..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={handleSearchChange}
             />
             {searchQuery && (
               <button className="clear-search" onClick={() => setSearchQuery('')}>×</button>
