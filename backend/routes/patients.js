@@ -1,109 +1,36 @@
 const express = require('express');
 const router = express.Router();
-const { query, getClient } = require('../config/db');
+const { query } = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
-const { calculateRiskScore } = require('../services/mlService');
+const { calculateRiskScore } = require('../services/riskEngine');
 
 router.use(verifyToken);
 
-//PREDICT RISK FOR ALL PATIENTS 
+//PREDICT RISK FOR ALL PATIENTS — delegates to riskEngine which queries DB itself
 router.post('/predict', async (req, res) => {
-    const activeWeatherAlerts = req.body.activeWeatherAlerts || [];
-
-    const client = await getClient();
+    const weatherAlerts = req.body.weatherAlerts || req.body.activeWeatherAlerts || [];
     try {
-        await client.query('BEGIN');
+        const patientsResult = await query(`SELECT patient_id FROM patients WHERE is_active = true`);
+        const patientIds = patientsResult.rows.map(r => r.patient_id);
 
-        const result = await client.query(`
-            SELECT 
-                patient_id, date_of_birth, distance_from_clinic, gender,
-                district, ward, village, headman, chronic_diseases,
-                next_pickup_date, arv_regimen, marital_status,
-                treatment_supporter, who_clinical_stage, art_start_date
-            FROM patients WHERE is_active = true
-        `);
+        if (patientIds.length === 0)
+            return res.json({ success: true, message: 'No active patients to score.', data: [] });
 
-        let updatedCount = 0;
+        const { batchCalculateRisk } = require('../services/riskEngine');
+        const results = await batchCalculateRisk(patientIds, weatherAlerts);
 
-        for (const patient of result.rows) {
-            try {
-                // Get past defaults count for this patient
-                const historyResult = await client.query(`
-                    SELECT COUNT(*) AS past_defaults
-                    FROM defaulters
-                    WHERE patient_id = $1
-                `, [patient.patient_id]);
-
-                const pickupResult = await client.query(`
-                    SELECT COUNT(*) AS total_pickups
-                    FROM medication_pickups
-                    WHERE patient_id = $1
-                `, [patient.patient_id]);
-
-                const pastDefaults      = parseInt(historyResult.rows[0].past_defaults) || 0;
-                const totalAppointments = parseInt(pickupResult.rows[0].total_pickups) || 1;
-
-                // Calculate days overdue
-                const daysOverdue = patient.next_pickup_date
-                    ? Math.max(0, Math.floor(
-                        (new Date() - new Date(patient.next_pickup_date)) / (1000 * 60 * 60 * 24)
-                      ))
-                    : 0;
-
-                // Build patient object matching riskEngine field names
-                const patientForML = {
-                    ...patient,
-                    chronic_diseases       : patient.chronic_diseases || '',
-                    total_appointments     : totalAppointments,
-                    treatment_supporter    : patient.treatment_supporter || false,
-                    who_clinical_stage     : patient.who_clinical_stage || 2,
-                    art_start_date         : patient.art_start_date || null,
-                    regimen                : patient.arv_regimen || 'TLD',
-                    marital_status         : patient.marital_status || 'Married',
-                };
-
-                // Call ML API
-                const prediction = await calculateRiskScore(
-                    patientForML,
-                    daysOverdue,
-                    pastDefaults,
-                    activeWeatherAlerts
-                );
-
-                // Update patient with ML prediction
-                await client.query(`
-                    UPDATE patients
-                    SET risk_score  = $1,
-                        risk_level  = $2,
-                        risk_factors= $3
-                    WHERE patient_id = $4
-                `, [
-                    prediction.score,
-                    prediction.label,
-                    JSON.stringify(prediction.factors),
-                    patient.patient_id
-                ]);
-
-                updatedCount++;
-
-            } catch (patientErr) {
-                console.error(`Risk prediction failed for patient ${patient.patient_id}:`, patientErr.message);
-            }
+        // Write scores back to patients table
+        for (const r of results) {
+            await query(
+                `UPDATE patients SET risk_score=$1, risk_level=$2, risk_factors=$3 WHERE patient_id=$4`,
+                [r.score, r.label, JSON.stringify(r.factors), r.patientId]
+            );
         }
 
-        await client.query('COMMIT');
-        res.json({
-            success: true,
-            message: `ML risk analysis completed for ${updatedCount} patients`,
-            model: 'LR + RF Ensemble '
-        });
-
+        res.json({ success: true, message: `Scored ${results.length} patients`, data: results });
     } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('Prediction error:', err);
-        res.status(500).json({ success: false, message: 'ML Prediction failed: ' + err.message });
-    } finally {
-        client.release();
+        console.error('Batch predict error:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -112,12 +39,9 @@ router.get('/', async (req, res) => {
     try {
         const result = await query(`
             SELECT *,
-                COALESCE(first_name || ' ' || last_name, full_name) AS display_name
+                TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) AS display_name
             FROM patients
-            WHERE patient_id NOT IN (
-                SELECT patient_id FROM defaulters WHERE status = 'pending'
-            )
-            ORDER BY risk_score DESC NULLS LAST, full_name ASC
+            ORDER BY risk_score DESC NULLS LAST, last_name ASC
         `);
         const data = result.rows.map(p => ({ ...p, risk_factors: parseFactors(p.risk_factors) }));
         res.json({ success: true, data });
@@ -146,16 +70,18 @@ router.get('/clinics', async (req, res) => {
 //CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
-        patient_number, first_name, last_name, date_of_birth, gender,
-        phone_number, alternative_phone, email, district, ward, village, headman,
-        distance_from_clinic, enrollment_date, arv_regimen,
-        pickup_frequency, next_pickup_date, is_new_patient,
+        art_number, first_name, last_name, date_of_birth, gender,
+        phone_number, alternative_phone, district, ward, village, headman,
+        province, enrollment_date, arv_regimen,
+        pickup_frequency, next_pickup_date,
         emergency_contact_name, emergency_contact_phone,
-        clinic_number, nurse_number, dispensing_clinic, chronic_diseases,
-        marital_status, treatment_supporter, who_clinical_stage, art_start_date
+        nok_name, nok_relationship, nok_phone,
+        clinic_name, clinic_number, nurse_number,
+        marital_status, treatment_supporter, who_clinical_stage, art_start_date,
+        chronic_score, tb_flag, pregnancy_flag,
     } = req.body;
 
-    const userId = req.user?.id || req.user?.user_id || req.user?.userId || req.user?.sub || req.user?.ID || null;
+    const userId = req.user?.id || req.user?.user_id || req.user?.userId || req.user?.sub || null;
     let createdByName = 'Unknown';
 
     if (userId) {
@@ -172,53 +98,66 @@ router.post('/', async (req, res) => {
 
     try {
         const freq = parseInt(pickup_frequency) || 30;
-        let finalPickupDate = null;
 
-        if (is_new_patient === true || is_new_patient === 'true') {
-            finalPickupDate = next_pickup_date || null;
-        } else {
-            const enrollDate = enrollment_date ? new Date(enrollment_date) : new Date();
-            const calc = new Date(enrollDate);
+        // next_pickup_date comes pre-calculated from PatientForm
+        // but recalculate as fallback if not provided
+        let finalPickupDate = next_pickup_date || null;
+        if (!finalPickupDate && enrollment_date) {
+            const calc = new Date(enrollment_date);
             calc.setDate(calc.getDate() + freq);
             finalPickupDate = calc.toISOString().split('T')[0];
         }
 
+        // NOK fields — form sends nok_name/nok_phone, map to emergency_contact columns
+        const nokName  = nok_name  || emergency_contact_name  || null;
+        const nokPhone = nok_phone || emergency_contact_phone || null;
+
         const result = await query(
             `INSERT INTO patients (
-                patient_number, first_name, last_name, date_of_birth, gender,
-                phone_number, alternative_phone, email, district, ward, village, headman,
-                distance_from_clinic, enrollment_date, arv_regimen,
+                art_number, first_name, last_name, date_of_birth, gender,
+                phone_number, alternative_phone,
+                province, district, ward, village, headman,
+                enrollment_date, arv_regimen,
                 pickup_frequency, next_pickup_date,
                 emergency_contact_name, emergency_contact_phone,
-                created_by, clinic_number, nurse_number, dispensing_clinic, chronic_diseases,
-                marital_status, treatment_supporter, who_clinical_stage, art_start_date
+                created_by, clinic_name, clinic_number, nurse_number,
+                marital_status, treatment_supporter,
+                who_clinical_stage, art_start_date,
+                chronic_score, tb_flag, pregnancy_flag
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
-                $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-                $21,$22,$23,$24,$25,$26,$27,$28
+                $11,$12,$13,$14,$15,$16,$17,$18,
+                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
             ) RETURNING *`,
             [
-                patient_number || `P-${Date.now()}`, first_name, last_name, date_of_birth, gender,
-                phone_number, alternative_phone || null, email || null, district || null, ward || null,
-                village || null, headman || null, distance_from_clinic || 0, enrollment_date, arv_regimen || null,
-                freq, finalPickupDate, emergency_contact_name || null, emergency_contact_phone || null,
+                art_number   || `CHP/UNKNOWN/${new Date().getFullYear().toString().slice(-2)}/${Date.now()}`,
+                first_name, last_name, date_of_birth, gender,
+                phone_number, alternative_phone || null,
+                province || null, district || null, ward || null,
+                village  || null, headman   || null,
+                enrollment_date, arv_regimen || null,
+                freq, finalPickupDate,
+                nokName, nokPhone,
                 createdByName,
-                clinic_number || null, nurse_number || null, dispensing_clinic || null, chronic_diseases || null,
-                marital_status || null, treatment_supporter || false,
-                who_clinical_stage || 2, art_start_date || null
+                clinic_name   || null,
+                clinic_number || null,
+                nurse_number  || null,
+                marital_status   || null,
+                treatment_supporter === true || treatment_supporter === 'true' ? true : false,
+                parseInt(who_clinical_stage) || 2,
+                art_start_date || null,
+                parseInt(chronic_score) || 0,
+                tb_flag        === true || tb_flag        === 'true' ? true : false,
+                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
             ]
         );
 
         const newPatient = result.rows[0];
 
-        
+        // Run initial risk prediction using the new riskEngine
         try {
-            const initialPrediction = await calculateRiskScore(
-                { ...newPatient, chronic_diseases: chronic_diseases || '' },
-                0,   
-                0,   
-                []
-            );
+            const { calculateRiskScore: scoreById } = require('../services/riskEngine');
+            const initialPrediction = await scoreById(newPatient.patient_id, []);
 
             await query(`
                 UPDATE patients
@@ -286,60 +225,63 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
     const {
         first_name, last_name, date_of_birth, gender, phone_number,
-        alternative_phone, email, district, ward, village, headman, distance_from_clinic,
+        alternative_phone, district, ward, village, headman, province,
         arv_regimen, emergency_contact_name, emergency_contact_phone,
-        next_pickup_date, pickup_frequency, clinic_number, nurse_number, dispensing_clinic,
-        chronic_diseases, marital_status, treatment_supporter, who_clinical_stage, art_start_date
+        nok_name, nok_phone,
+        next_pickup_date, pickup_frequency, clinic_name, clinic_number, nurse_number,
+        marital_status, treatment_supporter, who_clinical_stage, art_start_date,
+        chronic_score, tb_flag, pregnancy_flag,
     } = req.body;
+
+    const nokName  = nok_name  || emergency_contact_name  || null;
+    const nokPhone = nok_phone || emergency_contact_phone || null;
 
     try {
         const result = await query(
             `UPDATE patients SET
                 first_name=$1, last_name=$2, date_of_birth=$3, gender=$4,
-                phone_number=$5, alternative_phone=$6, email=$7,
-                district=$8, ward=$9, village=$10, headman=$11,
-                distance_from_clinic=$12, arv_regimen=$13,
-                emergency_contact_name=$14, emergency_contact_phone=$15,
-                next_pickup_date=$16, pickup_frequency=$17,
-                clinic_number=$18, nurse_number=$19, dispensing_clinic=$20,
-                chronic_diseases=$21, marital_status=$22,
-                treatment_supporter=$23, who_clinical_stage=$24, art_start_date=$25
-             WHERE patient_id=$26 RETURNING *`,
+                phone_number=$5, alternative_phone=$6,
+                province=$7, district=$8, ward=$9, village=$10, headman=$11,
+                arv_regimen=$12,
+                emergency_contact_name=$13, emergency_contact_phone=$14,
+                next_pickup_date=$15, pickup_frequency=$16,
+                clinic_name=$17, clinic_number=$18, nurse_number=$19,
+                marital_status=$20, treatment_supporter=$21,
+                who_clinical_stage=$22, art_start_date=$23,
+                chronic_score=$24, tb_flag=$25, pregnancy_flag=$26
+             WHERE patient_id=$27 RETURNING *`,
             [
-                first_name, last_name, date_of_birth, gender, phone_number,
-                alternative_phone || null, email || null, district || null,
-                ward || null, village || null, headman || null, distance_from_clinic,
-                arv_regimen || null, emergency_contact_name || null,
-                emergency_contact_phone || null, next_pickup_date || null,
-                pickup_frequency || 30, clinic_number || null, nurse_number || null,
-                dispensing_clinic || null, chronic_diseases || null,
-                marital_status || null, treatment_supporter || false,
-                who_clinical_stage || 2, art_start_date || null,
-                req.params.id
+                first_name, last_name, date_of_birth, gender,
+                phone_number, alternative_phone || null,
+                province || null, district || null, ward || null,
+                village  || null, headman   || null,
+                arv_regimen || null,
+                nokName, nokPhone,
+                next_pickup_date || null,
+                parseInt(pickup_frequency) || 30,
+                clinic_name   || null,
+                clinic_number || null,
+                nurse_number  || null,
+                marital_status || null,
+                treatment_supporter === true || treatment_supporter === 'true' ? true : false,
+                parseInt(who_clinical_stage) || 2,
+                art_start_date || null,
+                parseInt(chronic_score) || 0,
+                tb_flag        === true || tb_flag        === 'true' ? true : false,
+                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
+                req.params.id,
             ]
         );
 
+        if (result.rows.length === 0)
+            return res.status(404).json({ success: false, message: 'Patient not found' });
+
         const updatedPatient = result.rows[0];
 
-        // Re-run ML prediction after patient update
+        // Re-run ML prediction after update using riskEngine
         try {
-            const historyResult = await query(`
-                SELECT COUNT(*) AS past_defaults FROM defaulters WHERE patient_id = $1
-            `, [req.params.id]);
-
-            const pastDefaults = parseInt(historyResult.rows[0].past_defaults) || 0;
-            const daysOverdue  = next_pickup_date
-                ? Math.max(0, Math.floor(
-                    (new Date() - new Date(next_pickup_date)) / (1000 * 60 * 60 * 24)
-                  ))
-                : 0;
-
-            const prediction = await calculateRiskScore(
-                { ...updatedPatient, chronic_diseases: chronic_diseases || '' },
-                daysOverdue,
-                pastDefaults,
-                []
-            );
+            const { calculateRiskScore: scoreById } = require('../services/riskEngine');
+            const prediction = await scoreById(parseInt(req.params.id), []);
 
             await query(`
                 UPDATE patients
@@ -359,6 +301,7 @@ router.put('/:id', async (req, res) => {
 
         res.json({ success: true, patient: updatedPatient });
     } catch (err) {
+        console.error('Update patient error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });
