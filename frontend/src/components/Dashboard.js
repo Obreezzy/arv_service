@@ -56,12 +56,13 @@ function Dashboard({ onNavigate, currentUser }) {
       const patients   = (patientsRes.patients || patientsRes.data || []);
       const defaulters = (defaultersRes.defaulters || defaultersRes.data || []);
       
+      // The absolute total of everyone in your system
       const totalSystemPatients = patients.length; 
       const activeDefaulterCount = defaulters.length;
       
-      // CORRECTED ADHERENCE FORMULA:
-      // (Total Patients - Defaulters) / Total Patients * 100
+      // Mathematical fix: Active/Adherent patients ONLY
       const adherentCount = Math.max(0, totalSystemPatients - activeDefaulterCount);
+      
       const adherenceRate = totalSystemPatients > 0 
         ? Math.round((adherentCount / totalSystemPatients) * 100) 
         : 0;
@@ -70,7 +71,9 @@ function Dashboard({ onNavigate, currentUser }) {
       const mediumRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length;
 
       setStats({
-        totalPatients: totalSystemPatients, 
+        // By setting totalPatients to adherentCount, the dashboard card 
+        // will now drop when someone defaults, and increase when they return!
+        totalPatients: adherentCount, 
         activePatients: adherentCount,
         activeDefaulters: activeDefaulterCount,
         highRisk: highRiskCount, 
