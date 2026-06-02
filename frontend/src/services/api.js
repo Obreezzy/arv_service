@@ -24,6 +24,15 @@ export const authAPI = {
   register: async (userData) => { const response = await api.post('/auth/register', userData); return response.data; }
 };
 
+export const usersAPI = {
+  getAllUsers: async () => { const response = await api.get('/users'); return response.data; },
+  toggleStatus: async (id, is_active) => { const response = await api.put(`/users/${id}/status`, { is_active }); return response.data; }
+};
+
+export const dashboardAPI = {
+  getStats: async () => { const response = await api.get('/dashboard/overview'); return response.data; }
+};
+
 export const patientsAPI = {
   getAllPatients: async () => { const response = await api.get('/patients'); return response.data; },
   getPatientById: async (id) => { const response = await api.get(`/patients/${id}`); return response.data; },
@@ -31,8 +40,15 @@ export const patientsAPI = {
   updatePatient: async (id, patientData) => { const response = await api.put(`/patients/${id}`, patientData); return response.data; }
 };
 
+export const predictionsAPI = {
+  runForPatient: async (patientId, weatherAlerts = []) => { const response = await api.post(`/predictions/${patientId}`, { weatherAlerts }); return response.data; },
+  batchPredict: async (patientIds = [], weatherAlerts = []) => { const response = await api.post('/predictions/batch', { patientIds, weatherAlerts }); return response.data; },
+  getHistory: async (patientId) => { const response = await api.get(`/predictions/${patientId}/history`); return response.data; }
+};
+
 export const defaultersAPI = {
   getAllDefaulters: async () => { const response = await api.get('/defaulters'); return response.data; },
+  runDetection: async () => { const response = await api.post('/defaulters/detect', { grace_period: 3 }); return response.data; },
   resolveDefaulter: async (id, resolutionData) => { const response = await api.put(`/defaulters/${id}/resolve`, resolutionData); return response.data; }
 };
 
@@ -41,20 +57,18 @@ export const pickupsAPI = {
   getPatientPickups: async (patientId) => { const response = await api.get(`/pickups/patient/${patientId}`); return response.data; }
 };
 
-// --- RESTORED: schedulerAPI is required for Dashboard.js ---
+export const smsAPI = {
+  sendReminder: async (defaulterId) => { const response = await api.post('/sms/send-reminder', { defaulterId }); return response.data; }
+};
+
+export const clinicsAPI = {
+  getClinics: async () => { const response = await api.get('/patients/clinics'); return response.data; }
+};
+
 export const schedulerAPI = {
-  sendReminders: async (days = 1) => { 
-      const response = await api.post('/scheduler/trigger/send-reminders', { days }); 
-      return response.data; 
-  },
-  triggerDetection: async () => { 
-      const response = await api.post('/scheduler/trigger/detect-defaulters'); 
-      return response.data; 
-  },
-  getStatus: async () => { 
-      const response = await api.get('/scheduler/status'); 
-      return response.data; 
-  }
+  sendReminders: async (days = 1) => { const response = await api.post('/scheduler/trigger/send-reminders', { days }); return response.data; },
+  triggerDetection: async () => { const response = await api.post('/scheduler/trigger/detect-defaulters'); return response.data; },
+  getStatus: async () => { const response = await api.get('/scheduler/status'); return response.data; }
 };
 
 export default api;
