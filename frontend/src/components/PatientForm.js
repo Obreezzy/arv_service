@@ -1,4 +1,4 @@
-// v5.2 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, zero emojis
+// v5.3 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, zero emojis, numbers-only ward
 import React, { useState } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -119,6 +119,12 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
 
+    // STRICT INTERCEPTION: Reject non-numeric characters instantly for the ward field
+    if (name === 'ward' && value !== '') {
+      const numericOnly = /^\d*$/;
+      if (!numericOnly.test(value)) return;
+    }
+
     setFormData(prev => {
       const updated = { ...prev, [name]: type === 'checkbox' ? checked : value };
 
@@ -165,6 +171,11 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     if (!formData.nok_relationship.trim())  e.nok_relationship   = 'Relationship is required.';
     if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
     if (isAdmin && !formData.clinic_name.trim()) e.clinic_name   = 'Facility assignment is required.';
+
+    // Ward number format validation fallback check
+    if (formData.ward && !/^\d+$/.test(formData.ward)) {
+      e.ward = 'Ward parameter must contain whole numbers only.';
+    }
 
     const phoneReg = /^\+?[0-9]{9,15}$/;
     if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g, '')))
@@ -383,9 +394,9 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               <input id="district" name="district" value={formData.district}
                 onChange={handleChange} placeholder="e.g. Chipinge" />
             </Field>
-            <Field id="ward" label="Ward">
+            <Field id="ward" error={errors.ward} label="Ward">
               <input id="ward" name="ward" value={formData.ward}
-                onChange={handleChange} placeholder="e.g. Ward 9" />
+                onChange={handleChange} placeholder="e.g. 9" style={inputStyle(errors, 'ward')} />
             </Field>
             <Field id="village" label="Village">
               <input id="village" name="village" value={formData.village}
@@ -432,9 +443,9 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               <select id="chronic_score" name="chronic_score"
                 value={formData.chronic_score} onChange={handleChange}>
                 <option value="0">0 — None</option>
-                <option value="1">1 — Mild (e.g. Hypertension)</option>
-                <option value="2">2 — Moderate (e.g. Diabetes)</option>
-                <option value="3">3 — Severe (e.g. Renal Disease)</option>
+                <option value="1">1 — Mild</option>
+                <option value="2">2 — Moderate</option>
+                <option value="3">3 — Severe</option>
                 <option value="4">4 — Multiple conditions</option>
                 <option value="5">5 — Critical comorbidities</option>
               </select>
