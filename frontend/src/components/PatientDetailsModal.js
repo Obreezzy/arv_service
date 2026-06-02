@@ -48,12 +48,30 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
   const activeLabel  = prediction ? prediction.label      : (patient.risk_level  || 'Unknown');
   const activeSource = prediction ? prediction.prediction_source : null;
 
+  // Intercepts and filters out stale distance metrics from legacy rows
   const getFactors = () => {
-    if (prediction && prediction.factors) return prediction.factors;
-    if (!patient.risk_factors) return [];
-    if (Array.isArray(patient.risk_factors)) return patient.risk_factors;
-    try { return JSON.parse(patient.risk_factors); } catch (e) { return []; }
+    let rawFactors = [];
+    if (prediction && prediction.factors) {
+      rawFactors = prediction.factors;
+    } else if (patient.risk_factors) {
+      if (Array.isArray(patient.risk_factors)) {
+        rawFactors = patient.risk_factors;
+      } else {
+        try { 
+          rawFactors = JSON.parse(patient.risk_factors); 
+        } catch (e) { 
+          rawFactors = []; 
+        }
+      }
+    }
+    
+    return rawFactors.filter(factor => 
+      typeof factor === 'string' && 
+      !factor.toLowerCase().includes('distance') && 
+      !factor.toLowerCase().includes('commuter')
+    );
   };
+  
   const activeFactors = getFactors();
 
   const getRiskColor = (score) => {
@@ -187,23 +205,11 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
                     <span>Predicted Default Probability</span>
                     <span style={{ color: riskColor, fontWeight: 'bold' }}>{activeScore}%</span>
                   </div>
-                  <div className="progress-bar-bg">
+                  <div className="progress-bar-bg" style={{ marginBottom: '1.5rem' }}>
                     <div
                       className="progress-bar-fill"
                       style={{ width: `${activeScore}%`, backgroundColor: riskColor }}
                     ></div>
-                  </div>
-                  <div style={{ position: 'relative', height: '16px' }}>
-                    <div style={{
-                      position: 'absolute',
-                      left: '40%',
-                      borderLeft: '2px dashed #6b7280',
-                      height: '12px',
-                      top: 0,
-                    }} />
-                    <span style={{ position: 'absolute', left: '41%', fontSize: '0.65rem', color: '#6b7280' }}>
-                      threshold 40
-                    </span>
                   </div>
                 </div>
 
