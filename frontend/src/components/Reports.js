@@ -126,7 +126,7 @@ function Reports() {
  showToast({ type: 'success', message: 'Summary PDF generated!' });
  };
 
- // 2. Patient-Specific Report (UPDATED: CLEAN UI, NO EMOJIS) 
+ // 2. Patient-Specific Report 
  const generatePatientPDF = async () => {
  const patient = patientsData.find(p => p.patient_id === parseInt(selectedPatient));
  if (!patient) { showToast({ type: 'error', message: 'Please select a patient first' }); return; }
@@ -187,7 +187,7 @@ function Reports() {
  // Recent Pickup History Section (AI section removed entirely) 
  const nextY = doc.lastAutoTable.finalY + 15;
  doc.setFontSize(13); doc.setFont('helvetica','bold');
- doc.text('Recent Pickup History', 14, nextY); // Clean title without emojis
+ doc.text('Recent Pickup History', 14, nextY); 
 
  const historyBody = history.slice(0, 15).map((pickup, index) => {
  const actualDate = new Date(pickup.actual_pickup_date);
@@ -197,8 +197,7 @@ function Reports() {
  let status = 'On Time';
  if (expectedDate && actualDate > expectedDate) {
  const daysLate = Math.floor((actualDate - expectedDate) / (1000 * 60 * 60 * 24));
- status = `${daysLate} Days Late`; // Removed emojis
- } else if (!expectedDate) {
+ status = `${daysLate} Days Late`; 
  status = 'First Record';
  }
 
@@ -225,10 +224,10 @@ function Reports() {
  didParseCell: function(data) {
  if (data.section === 'body' && data.column.index === 2) {
  if (data.cell.raw.includes('Late')) {
- data.cell.styles.textColor = [220, 38, 38]; // Clean Red Text
+ data.cell.styles.textColor = [220, 38, 38]; 
  data.cell.styles.fontStyle = 'bold';
  } else if (data.cell.raw.includes('On Time')) {
- data.cell.styles.textColor = [22, 163, 74]; // Clean Green Text
+ data.cell.styles.textColor = [22, 163, 74]; 
  }
  }
  }
@@ -251,14 +250,13 @@ function Reports() {
 
  autoTable(doc, {
  startY: 55,
- head: [['Patient', 'ID', 'Risk', 'Score', 'Distance', 'Next Pickup', 'Phone']],
+ head: [['Patient', 'ID', 'Risk', 'Score', 'Next Pickup', 'Phone']],
  body: highRisk.length > 0
  ? highRisk.map(p => [
  `${p.first_name} ${p.last_name}`,
  p.patient_number,
  p.risk_level?.toUpperCase() || 'N/A',
  p.risk_score ? `${p.risk_score}%` : '0%',
- p.distance_from_clinic ? `${Math.round(p.distance_from_clinic)}km` : 'N/A',
  fmtDate(p.next_pickup_date),
  p.phone_number || 'N/A'
  ])
