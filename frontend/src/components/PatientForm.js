@@ -1,4 +1,4 @@
-// v5.6 - Added active phone number validation and auto-calculation for next pickup date
+// v5.7 - Fully validated form implementation with real-time field filters and dynamic calculations
 import React, { useState, useEffect } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -23,6 +23,11 @@ const FACILITIES = [
 ];
 
 const today = new Date().toISOString().split('T')[0];
+const currentYear = new Date().getFullYear();
+
+// Enforces dynamic bounds starting 100 years ago and ending exactly today (blocks 2027 and future selection)
+const MIN_BIRTH_DATE = `${currentYear - 100}-01-01`; 
+const MAX_BIRTH_DATE = today;
 
 const Field = ({ id, label, required, hint, error, children }) => (
   <div className="form-group">
@@ -101,7 +106,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     nurse_number:        isNurse ? nurseNumber  : '',
   });
 
-  // Automatically calculate the Next Pickup Date whenever Enrollment Date or Frequency changes
+  // Automatically calculate Next Pickup Date based on Enrollment Date and Frequency parameters
   useEffect(() => {
     if (formData.enrollment_date && formData.pickup_frequency) {
       const date = new Date(formData.enrollment_date);
@@ -122,17 +127,17 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
     let finalValue = value;
 
-    // ACTIVE FILTER: Instantly strips numbers and special chars from names
+    // ACTIVE REJECTION FILTER: Instantly strips digits and special characters from alphabet name fields
     if (name === 'first_name' || name === 'last_name' || name === 'nok_name') {
       finalValue = value.replace(/[^A-Za-z\s-]/g, '');
     }
 
-    // ACTIVE FILTER: Instantly strips letters from phone numbers (allows only digits, plus, and spaces)
+    // ACTIVE REJECTION FILTER: Instantly strips non-phone characters from telephone input fields
     if (name === 'phone_number' || name === 'alternative_phone' || name === 'nok_phone') {
       finalValue = value.replace(/[^\d+\s]/g, '');
     }
 
-    // ACTIVE FILTER: Blocks non-numeric keys immediately on type within the Ward field
+    // FIXED: Blocks non-numeric keys immediately on type within the Ward block field
     if (name === 'ward' && value !== '') {
       const numericOnly = /^\d*$/;
       if (!numericOnly.test(value)) return;
@@ -165,7 +170,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     const nameRegex = /^[A-Za-z\s-]+$/;
     const phoneReg = /^\+?[0-9]{9,15}$/;
 
-    // Strict First Name Validation
+    // Strict First Name Evaluation
     if (!formData.first_name.trim()) {
       e.first_name = 'First name is required.';
     } else if (formData.first_name.trim().length < 2) {
@@ -174,7 +179,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.first_name = 'First name can only contain letters.';
     }
 
-    // Strict Last Name Validation
+    // Strict Last Name Evaluation
     if (!formData.last_name.trim()) {
       e.last_name = 'Last name is required.';
     } else if (formData.last_name.trim().length < 2) {
@@ -183,7 +188,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.last_name = 'Last name can only contain letters.';
     }
 
-    // Strict Next of Kin Name Validation
+    // Strict Next of Kin Name Evaluation
     if (!formData.nok_name.trim()) {
       e.nok_name = 'Next of kin name is required.';
     } else if (formData.nok_name.trim().length < 2) {
@@ -192,21 +197,21 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.nok_name = 'Next of kin name can only contain letters.';
     }
 
-    // Phone Number Validation
+    // Primary Phone Structural Check
     if (!formData.phone_number.trim()) {
       e.phone_number = 'Phone number is required.';
     } else if (!phoneReg.test(formData.phone_number.replace(/\s/g, ''))) {
       e.phone_number = 'Enter a valid phone number e.g. +263771234567';
     }
 
-    // Next of Kin Phone Validation
+    // Next of Kin Phone Structural Check
     if (!formData.nok_phone.trim()) {
       e.nok_phone = 'Next of kin phone is required.';
     } else if (!phoneReg.test(formData.nok_phone.replace(/\s/g, ''))) {
       e.nok_phone = 'Enter a valid phone number e.g. +263771234567';
     }
 
-    // Alternative Phone Validation (Optional, but checked if filled)
+    // Alternative Phone Structural Check
     if (formData.alternative_phone.trim() !== '' && !phoneReg.test(formData.alternative_phone.replace(/\s/g, ''))) {
       e.alternative_phone = 'Enter a valid phone number e.g. +263771234567';
     }
@@ -223,10 +228,11 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       e.ward = 'Ward parameter must contain whole numbers only.';
     }
 
+    // Comprehensive boundary verification preventing future date selection anomalies
     if (formData.date_of_birth) {
-      const yr = new Date(formData.date_of_birth).getFullYear();
-      if (yr < 1947 || yr > 2008)
-        e.date_of_birth = 'Date of birth must be between 1947 and 2008.';
+      if (formData.date_of_birth < MIN_BIRTH_DATE || formData.date_of_birth > MAX_BIRTH_DATE) {
+        e.date_of_birth = `Date of birth must be between ${currentYear - 100} and today.`;
+      }
     }
 
     setErrors(e);
@@ -381,10 +387,10 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 onChange={handleChange} placeholder="Enter last name"
                 style={inputStyle(errors, 'last_name')} autoComplete="off" />
             </Field>
-            <Field id="date_of_birth" error={errors.date_of_birth} label="Date of Birth" required hint="Range: 1947 — 2008">
+            <Field id="date_of_birth" error={errors.date_of_birth} label="Date of Birth" required hint="Must be a valid past date">
               <input id="date_of_birth" type="date" name="date_of_birth"
                 value={formData.date_of_birth} onChange={handleChange}
-                min="1947-01-01" max="2008-12-31"
+                min={MIN_BIRTH_DATE} max={MAX_BIRTH_DATE}
                 style={inputStyle(errors, 'date_of_birth')} />
             </Field>
             <Field id="gender" error={errors.gender} label="Gender" required>
