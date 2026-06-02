@@ -1,4 +1,4 @@
-// v5 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation
+// v5.1 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation, added clear ID placeholder
 import React, { useState } from 'react';
 import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -19,7 +19,7 @@ const FACILITIES = [
   { name: 'Chipinge District Hospital',  code: 'CHP-DH' },
   { name: 'Mpinga Clinic',               code: 'CHP-MP' },
   { name: 'Ndowoyo Clinic',              code: 'CHP-ND' },
-  { name: 'Checheche RHC',              code: 'CHP-CH' },
+  { name: 'Checheche RHC',               code: 'CHP-CH' },
 ];
 
 const today = new Date().toISOString().split('T')[0];
@@ -38,10 +38,6 @@ const addDays = (dateStr, days) => {
   return d.toISOString().split('T')[0];
 };
 
-// ── These are defined OUTSIDE PatientForm so React never recreates them ──────
-// Defining components inside a render function causes React to unmount/remount
-// on every keystroke, which destroys input focus. Module-level = stable identity.
-
 const Field = ({ id, label, required, hint, error, children }) => (
   <div className="form-group">
     <label htmlFor={id}>
@@ -53,7 +49,7 @@ const Field = ({ id, label, required, hint, error, children }) => (
     )}
     {error && (
       <small style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
-        ⚠ {error}
+        System Alert: {error}
       </small>
     )}
   </div>
@@ -69,11 +65,9 @@ const Section = ({ title }) => (
   }}>{title}</div>
 );
 
-// Standalone — takes errors object and field id, returns style object
 const inputStyle = (errors, id) => ({
   borderColor: errors[id] ? '#dc2626' : undefined
 });
-// ─────────────────────────────────────────────────────────────────────────────
 
 function PatientForm({ onClose, onSuccess, currentUser }) {
   const { showToast } = useNotifications();
@@ -121,7 +115,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     nurse_number:        isNurse ? nurseNumber  : '',
   });
 
-  // ── Single handleChange — no useEffect, no focus loss ──────────────
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
@@ -129,7 +122,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     setFormData(prev => {
       const updated = { ...prev, [name]: type === 'checkbox' ? checked : value };
 
-      // Auto-recalc next pickup date
       if (name === 'enrollment_date' || name === 'pickup_frequency') {
         const base = name === 'enrollment_date' ? value : prev.enrollment_date;
         const freq = name === 'pickup_frequency' ? value  : prev.pickup_frequency;
@@ -219,8 +211,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     }
   };
 
-
-
   return (
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '92vh', overflowY: 'auto' }}>
@@ -231,7 +221,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
         <form onSubmit={handleSubmit} className="modal-body" noValidate>
 
-          {/* ── FACILITY ASSIGNMENT (admin only — top so ART generates early) ── */}
           {isAdmin && (
             <>
               <Section title="Facility Assignment" />
@@ -302,6 +291,16 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
           {/* ── PATIENT IDENTIFICATION ── */}
           <Section title="Patient Identification" />
           <div className="form-grid">
+            <Field id="assigned_id_placeholder" label="System Patient ID">
+              <input
+                id="assigned_id_placeholder"
+                type="text"
+                value="Auto-assigned on save (e.g. P-0008)"
+                readOnly
+                style={{ background: '#f9fafb', color: '#6b7280', fontStyle: 'italic', border: '1px dashed #d1d5db' }}
+              />
+            </Field>
+            
             <Field id="art_number" error={errors.art_number} label="ART Number" required>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <input
@@ -325,11 +324,12 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                       borderRadius: '6px', cursor: 'pointer', color: '#166534', fontWeight: '600'
                     }}
                   >
-                    ↺ Regenerate
+                    Regenerate
                   </button>
                 )}
               </div>
             </Field>
+            
             <Field id="enrollment_date" error={errors.enrollment_date} label="Enrollment Date" required>
               <input
                 id="enrollment_date"
@@ -531,7 +531,6 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* ── NURSE — clinic locked ── */}
           {isNurse && (
             <>
               <Section title="Facility Assignment" />
