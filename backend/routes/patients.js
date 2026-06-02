@@ -81,15 +81,12 @@ router.post('/', async (req, res) => {
         chronic_score, tb_flag, pregnancy_flag,
     } = req.body;
 
-    // FIX: Extract userId as an integer instead of querying for the string name
     const userId = req.user?.id || req.user?.user_id || req.user?.userId || req.user?.sub || null;
     const createdById = userId ? parseInt(userId) : null;
 
     try {
         const freq = parseInt(pickup_frequency) || 30;
 
-        // next_pickup_date comes pre-calculated from PatientForm
-        // but recalculate as fallback if not provided
         let finalPickupDate = next_pickup_date || null;
         if (!finalPickupDate && enrollment_date) {
             const calc = new Date(enrollment_date);
@@ -97,13 +94,15 @@ router.post('/', async (req, res) => {
             finalPickupDate = calc.toISOString().split('T')[0];
         }
 
-        // NOK fields — form sends nok_name/nok_phone, map to emergency_contact columns
         const nokName  = nok_name  || emergency_contact_name  || null;
         const nokPhone = nok_phone || emergency_contact_phone || null;
 
+        // COMBINE first and last name to satisfy DB NOT NULL constraint
+        const fullName = `${first_name || ''} ${last_name || ''}`.trim(); 
+
         const result = await query(
             `INSERT INTO patients (
-                art_number, first_name, last_name, date_of_birth, gender,
+                art_number, first_name, last_name, full_name, date_of_birth, gender,
                 phone_number, alternative_phone,
                 province, district, ward, village, headman,
                 enrollment_date, arv_regimen,
@@ -116,18 +115,29 @@ router.post('/', async (req, res) => {
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,$16,$17,$18,
-                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
+                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
             ) RETURNING *`,
             [
                 art_number   || `CHP/UNKNOWN/${new Date().getFullYear().toString().slice(-2)}/${Date.now()}`,
-                first_name, last_name, date_of_birth, gender,
-                phone_number, alternative_phone || null,
-                province || null, district || null, ward || null,
-                village  || null, headman   || null,
-                enrollment_date, arv_regimen || null,
-                freq, finalPickupDate,
-                nokName, nokPhone,
-                createdById, // <--- Fixed parameter $19 (now passes Integer)
+                first_name, 
+                last_name, 
+                fullName, // $4 mapped to full_name
+                date_of_birth, 
+                gender,
+                phone_number, 
+                alternative_phone || null,
+                province || null, 
+                district || null, 
+                ward || null,
+                village  || null, 
+                headman   || null,
+                enrollment_date, 
+                arv_regimen || null,
+                freq, 
+                finalPickupDate,
+                nokName, 
+                nokPhone,
+                createdById, 
                 clinic_name   || null,
                 clinic_number || null,
                 nurse_number  || null,
@@ -137,13 +147,12 @@ router.post('/', async (req, res) => {
                 art_start_date || null,
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
-                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
+                pregnancy_flag === true || pregnancy_flag === 'true' ? true : false, // $30
             ]
         );
 
         const newPatient = result.rows[0];
 
-        // Run initial risk prediction using the new riskEngine
         try {
             const { calculateRiskScore: scoreById } = require('../services/riskEngine');
             const initialPrediction = await scoreById(newPatient.patient_id, []);
@@ -169,7 +178,6 @@ router.post('/', async (req, res) => {
             console.warn('Initial ML prediction skipped:', mlErr.message);
         }
 
-        // Create treatment record
         if (arv_regimen) {
             try {
                 await query(
@@ -223,28 +231,40 @@ router.put('/:id', async (req, res) => {
 
     const nokName  = nok_name  || emergency_contact_name  || null;
     const nokPhone = nok_phone || emergency_contact_phone || null;
+    
+    // COMBINE for updates as well so it stays synced
+    const fullName = `${first_name || ''} ${last_name || ''}`.trim();
 
     try {
         const result = await query(
             `UPDATE patients SET
-                first_name=$1, last_name=$2, date_of_birth=$3, gender=$4,
-                phone_number=$5, alternative_phone=$6,
-                province=$7, district=$8, ward=$9, village=$10, headman=$11,
-                arv_regimen=$12,
-                emergency_contact_name=$13, emergency_contact_phone=$14,
-                next_pickup_date=$15, pickup_frequency=$16,
-                clinic_name=$17, clinic_number=$18, nurse_number=$19,
-                marital_status=$20, treatment_supporter=$21,
-                who_clinical_stage=$22, art_start_date=$23,
-                chronic_score=$24, tb_flag=$25, pregnancy_flag=$26
-             WHERE patient_id=$27 RETURNING *`,
+                first_name=$1, last_name=$2, full_name=$3, date_of_birth=$4, gender=$5,
+                phone_number=$6, alternative_phone=$7,
+                province=$8, district=$9, ward=$10, village=$11, headman=$12,
+                arv_regimen=$13,
+                emergency_contact_name=$14, emergency_contact_phone=$15,
+                next_pickup_date=$16, pickup_frequency=$17,
+                clinic_name=$18, clinic_number=$19, nurse_number=$20,
+                marital_status=$21, treatment_supporter=$22,
+                who_clinical_stage=$23, art_start_date=$24,
+                chronic_score=$25, tb_flag=$26, pregnancy_flag=$27
+             WHERE patient_id=$28 RETURNING *`,
             [
-                first_name, last_name, date_of_birth, gender,
-                phone_number, alternative_phone || null,
-                province || null, district || null, ward || null,
-                village  || null, headman   || null,
+                first_name, 
+                last_name, 
+                fullName, // $3 mapped to full_name
+                date_of_birth, 
+                gender,
+                phone_number, 
+                alternative_phone || null,
+                province || null, 
+                district || null, 
+                ward || null,
+                village  || null, 
+                headman   || null,
                 arv_regimen || null,
-                nokName, nokPhone,
+                nokName, 
+                nokPhone,
                 next_pickup_date || null,
                 parseInt(pickup_frequency) || 30,
                 clinic_name   || null,
@@ -257,7 +277,7 @@ router.put('/:id', async (req, res) => {
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                req.params.id,
+                req.params.id, // $28
             ]
         );
 
@@ -266,7 +286,6 @@ router.put('/:id', async (req, res) => {
 
         const updatedPatient = result.rows[0];
 
-        // Re-run ML prediction after update using riskEngine
         try {
             const { calculateRiskScore: scoreById } = require('../services/riskEngine');
             const prediction = await scoreById(parseInt(req.params.id), []);
