@@ -56,22 +56,26 @@ function Dashboard({ onNavigate, currentUser }) {
       const patients   = (patientsRes.patients || patientsRes.data || []);
       const defaulters = (defaultersRes.defaulters || defaultersRes.data || []);
       
-      // Calculate metrics from current state
-      const activePatientsList = patients.filter(p => p.is_active === true);
-      const activeCount = activePatientsList.length;
       const totalSystemPatients = patients.length; 
+      const activeDefaulterCount = defaulters.length;
+      
+      // CORRECTED ADHERENCE FORMULA:
+      // (Total Patients - Defaulters) / Total Patients * 100
+      const adherentCount = Math.max(0, totalSystemPatients - activeDefaulterCount);
+      const adherenceRate = totalSystemPatients > 0 
+        ? Math.round((adherentCount / totalSystemPatients) * 100) 
+        : 0;
 
       const highRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'high').length;
       const mediumRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length;
 
       setStats({
         totalPatients: totalSystemPatients, 
-        activePatients: activeCount,
-        activeDefaulters: defaulters.length,
+        activePatients: adherentCount,
+        activeDefaulters: activeDefaulterCount,
         highRisk: highRiskCount, 
         mediumRisk: mediumRiskCount,
-        adherenceRate: totalSystemPatients > 0
-          ? Math.round((activeCount / totalSystemPatients) * 100) : 0
+        adherenceRate: adherenceRate
       });
       
       setLoading(false);
@@ -108,7 +112,7 @@ function Dashboard({ onNavigate, currentUser }) {
   };
 
   const adherenceChartData = {
-    labels: ['Active', 'Defaulters'],
+    labels: ['Adherent', 'Defaulters'],
     datasets: [{ 
         data: [stats.activePatients, stats.activeDefaulters], 
         backgroundColor: ['#10b981', '#ef4444'], 
