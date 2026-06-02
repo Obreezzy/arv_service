@@ -1,6 +1,11 @@
 // backend/services/riskEngine.js
 // ARV Defaulters Management System v2
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Exports:
+//   calculateRiskScore(patientId, activeWeatherAlerts?)  - single patient
+//   batchCalculateRisk(patientIds, activeWeatherAlerts?) - dashboard / bulk
+//   checkMLHealth()                                      - server startup check
+// -----------------------------------------------------------------------------
 
 'use strict';
 
@@ -19,7 +24,6 @@ const pool = new Pool({
     ssl      : { rejectUnauthorized: false },
 });
 
-// FIXED: maps exactly to patient_id to prevent server database query failures
 const FEATURE_QUERY = `
 WITH patient_base AS (
     SELECT
@@ -161,16 +165,6 @@ const buildRiskFactors = (f, weatherBoosted = false) => {
     return factors.length ? factors : ['No significant risk flags identified'];
 };
 
-const computeFallbackScore = (f) => {
-    let score = 0;
-    score += (f.missed_rate || 0) * 40;
-    score += Math.min((f.avg_days_late || 0) / 10, 1) * 20;
-    if (f.who_clinical_stage >= 3) score += 20;
-    if (f.tb_flag === 1) score += 15;
-    if (f.has_supporter === 0) score += 15;
-    return Math.min(100, Math.max(0, Math.round(score)));
-};
-
 const saveToAuditTrail = async (client, patientId, score, label, source, features) => {
     try {
         await client.query(
@@ -198,10 +192,10 @@ const scoreOnePatient = async (features, activeWeatherAlerts = []) => {
         flaskFactors = mlResponse.data.factors || []; 
         predictionSource = 'ml_model';
     } catch (flaskErr) {
-        console.warn(`Flask unavailable (${flaskErr.message}). Using fallback engine.`);
-        score            = computeFallbackScore(features);
-        flaskFactors     = [];
-        predictionSource = 'fallback_engine';
+        console.error(`[riskEngine] ML Strict Mode: Flask unavailable (${flaskErr.message}).`);
+        
+        // STRICT MODE: Fail loudly instead of applying a fallback script
+        throw new Error(`Strict ML Test Failed: Unable to reach or process the Python Flask API. Reason: ${flaskErr.message}`);
     }
 
     const weatherBoosted = activeWeatherAlerts.length > 0 &&
@@ -269,10 +263,11 @@ const batchCalculateRisk = async (patientIds, activeWeatherAlerts = []) => {
 const checkMLHealth = async () => {
     try {
         const res = await axios.get(`${ML_API_URL}/health`, { timeout: 10000 });
-        console.log(`ML Risk Engine online — model: ${res.data.model || 'XGBoost'}`);
+        console.log(`ML Risk Engine online - model: ${res.data.model || 'XGBoost'}`);
         return true;
     } catch (err) {
-        console.warn('ML Risk Engine offline — fallback score engine initialized.');
+        console.warn('ML Risk Engine offline - STRICT MODE: Predictions will fail until ML is restored.');
+        console.warn(`Expected at: ${ML_API_URL}`);
         return false;
     }
 };
