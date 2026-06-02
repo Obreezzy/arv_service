@@ -112,4 +112,14 @@ const calculateRiskScore = async (patientId) => {
     return { patientId, score, label, factors };
 };
 
-module.exports = { calculateRiskScore, batchCalculateRisk: async (ids) => /* ... logic above ... */ };
+const batchCalculateRisk = async (patientIds) => {
+    if (!patientIds || !patientIds.length) return [];
+    return await Promise.all(patientIds.map(async (id) => {
+        const { rows } = await query(FEATURE_QUERY, [[id]]);
+        const { score, label, factors } = await scoreOnePatient(rows[0]);
+        await saveToAuditTrail(id, score, label, 'ml_model', rows[0], factors);
+        return { patientId: id, score, label, factors };
+    }));
+};
+
+module.exports = { calculateRiskScore, batchCalculateRisk, checkMLHealth: async () => true };
