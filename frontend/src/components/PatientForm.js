@@ -38,6 +38,43 @@ const addDays = (dateStr, days) => {
   return d.toISOString().split('T')[0];
 };
 
+// ── These are defined OUTSIDE PatientForm so React never recreates them ──────
+// Defining components inside a render function causes React to unmount/remount
+// on every keystroke, which destroys input focus. Module-level = stable identity.
+
+const Field = ({ id, label, required, hint, error, children }) => (
+  <div className="form-group">
+    <label htmlFor={id}>
+      {label}{required && <span style={{ color: '#ef4444' }}> *</span>}
+    </label>
+    {children}
+    {hint && !error && (
+      <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>{hint}</small>
+    )}
+    {error && (
+      <small style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
+        ⚠ {error}
+      </small>
+    )}
+  </div>
+);
+
+const Section = ({ title }) => (
+  <div style={{
+    fontSize: '0.72rem', fontWeight: '700', color: '#6b7280',
+    textTransform: 'uppercase', letterSpacing: '0.07em',
+    margin: '1.5rem 0 0.75rem',
+    borderBottom: '1px solid #e5e7eb',
+    paddingBottom: '0.4rem'
+  }}>{title}</div>
+);
+
+// Standalone — takes errors object and field id, returns style object
+const inputStyle = (errors, id) => ({
+  borderColor: errors[id] ? '#dc2626' : undefined
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 function PatientForm({ onClose, onSuccess, currentUser }) {
   const { showToast } = useNotifications();
   const [loading, setLoading]           = useState(false);
@@ -182,36 +219,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     }
   };
 
-  const Field = ({ id, label, required, hint, children }) => (
-    <div className="form-group">
-      <label htmlFor={id}>
-        {label}{required && <span style={{ color: '#ef4444' }}> *</span>}
-      </label>
-      {children}
-      {hint && !errors[id] && (
-        <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>{hint}</small>
-      )}
-      {errors[id] && (
-        <small style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
-          ⚠ {errors[id]}
-        </small>
-      )}
-    </div>
-  );
 
-  const Section = ({ title }) => (
-    <div style={{
-      fontSize: '0.72rem', fontWeight: '700', color: '#6b7280',
-      textTransform: 'uppercase', letterSpacing: '0.07em',
-      margin: '1.5rem 0 0.75rem',
-      borderBottom: '1px solid #e5e7eb',
-      paddingBottom: '0.4rem'
-    }}>{title}</div>
-  );
-
-  const inputStyle = (id) => ({
-    borderColor: errors[id] ? '#dc2626' : undefined
-  });
 
   return (
     <div className="modal-overlay">
@@ -228,7 +236,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             <>
               <Section title="Facility Assignment" />
               <div className="form-grid">
-                <Field id="clinic_name" label="Facility Name" required>
+                <Field id="clinic_name" error={errors.clinic_name} label="Facility Name" required>
                   <div style={{ position: 'relative' }}>
                     <input
                       id="clinic_name"
@@ -244,7 +252,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                       onFocus={() => setShowDropdown(true)}
                       onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
                       placeholder="Search facility name or code..."
-                      style={inputStyle('clinic_name')}
+                      style={inputStyle(errors, 'clinic_name')}
                       autoComplete="off"
                     />
                     {showDropdown && filteredFacilities.length > 0 && (
@@ -294,7 +302,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
           {/* ── PATIENT IDENTIFICATION ── */}
           <Section title="Patient Identification" />
           <div className="form-grid">
-            <Field id="art_number" label="ART Number" required>
+            <Field id="art_number" error={errors.art_number} label="ART Number" required>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                 <input
                   id="art_number"
@@ -302,7 +310,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                   value={formData.art_number}
                   onChange={handleChange}
                   placeholder={formData.clinic_number ? '' : 'Select facility first'}
-                  style={{ ...inputStyle('art_number'), flex: 1, fontFamily: 'monospace' }}
+                  style={{ ...inputStyle(errors, 'art_number'), flex: 1, fontFamily: 'monospace' }}
                 />
                 {formData.clinic_number && (
                   <button
@@ -322,7 +330,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 )}
               </div>
             </Field>
-            <Field id="enrollment_date" label="Enrollment Date" required>
+            <Field id="enrollment_date" error={errors.enrollment_date} label="Enrollment Date" required>
               <input
                 id="enrollment_date"
                 type="date"
@@ -336,34 +344,34 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
           {/* ── PERSONAL INFORMATION ── */}
           <Section title="Personal Information" />
           <div className="form-grid">
-            <Field id="first_name" label="First Name" required>
+            <Field id="first_name" error={errors.first_name} label="First Name" required>
               <input id="first_name" name="first_name" value={formData.first_name}
                 onChange={handleChange} placeholder="Enter first name"
-                style={inputStyle('first_name')} autoComplete="off" />
+                style={inputStyle(errors, 'first_name')} autoComplete="off" />
             </Field>
-            <Field id="last_name" label="Last Name" required>
+            <Field id="last_name" error={errors.last_name} label="Last Name" required>
               <input id="last_name" name="last_name" value={formData.last_name}
                 onChange={handleChange} placeholder="Enter last name"
-                style={inputStyle('last_name')} autoComplete="off" />
+                style={inputStyle(errors, 'last_name')} autoComplete="off" />
             </Field>
-            <Field id="date_of_birth" label="Date of Birth" required hint="Range: 1947 — 2008">
+            <Field id="date_of_birth" error={errors.date_of_birth} label="Date of Birth" required hint="Range: 1947 — 2008">
               <input id="date_of_birth" type="date" name="date_of_birth"
                 value={formData.date_of_birth} onChange={handleChange}
                 min="1947-01-01" max="2008-12-31"
-                style={inputStyle('date_of_birth')} />
+                style={inputStyle(errors, 'date_of_birth')} />
             </Field>
-            <Field id="gender" label="Gender" required>
+            <Field id="gender" error={errors.gender} label="Gender" required>
               <select id="gender" name="gender" value={formData.gender}
-                onChange={handleChange} style={inputStyle('gender')}>
+                onChange={handleChange} style={inputStyle(errors, 'gender')}>
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
                 <option value="F">Female</option>
               </select>
             </Field>
-            <Field id="marital_status" label="Marital Status" required hint="Used in ML risk model">
+            <Field id="marital_status" error={errors.marital_status} label="Marital Status" required hint="Used in ML risk model">
               <select id="marital_status" name="marital_status"
                 value={formData.marital_status} onChange={handleChange}
-                style={inputStyle('marital_status')}>
+                style={inputStyle(errors, 'marital_status')}>
                 <option value="">Select marital status</option>
                 <option value="Single">Single</option>
                 <option value="Married">Married</option>
@@ -371,16 +379,16 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 <option value="Widowed">Widowed</option>
               </select>
             </Field>
-            <Field id="phone_number" label="Phone Number" required>
+            <Field id="phone_number" error={errors.phone_number} label="Phone Number" required>
               <input id="phone_number" name="phone_number" value={formData.phone_number}
                 onChange={handleChange} placeholder="+263771234567"
-                style={inputStyle('phone_number')} />
+                style={inputStyle(errors, 'phone_number')} />
             </Field>
-            <Field id="alternative_phone" label="Alternative Phone">
+            <Field id="alternative_phone" error={errors.alternative_phone} label="Alternative Phone">
               <input id="alternative_phone" name="alternative_phone"
                 value={formData.alternative_phone} onChange={handleChange}
                 placeholder="+263771234567"
-                style={inputStyle('alternative_phone')} />
+                style={inputStyle(errors, 'alternative_phone')} />
             </Field>
           </div>
 
@@ -416,19 +424,19 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               <input id="art_start_date" type="date" name="art_start_date"
                 value={formData.art_start_date} onChange={handleChange} />
             </Field>
-            <Field id="who_clinical_stage" label="WHO Clinical Stage" required>
+            <Field id="who_clinical_stage" error={errors.who_clinical_stage} label="WHO Clinical Stage" required>
               <select id="who_clinical_stage" name="who_clinical_stage"
                 value={formData.who_clinical_stage} onChange={handleChange}
-                style={inputStyle('who_clinical_stage')}>
+                style={inputStyle(errors, 'who_clinical_stage')}>
                 <option value="1">Stage 1 — Asymptomatic</option>
                 <option value="2">Stage 2 — Mild Symptoms</option>
                 <option value="3">Stage 3 — Advanced</option>
                 <option value="4">Stage 4 — Severe</option>
               </select>
             </Field>
-            <Field id="arv_regimen" label="ARV Regimen" required>
+            <Field id="arv_regimen" error={errors.arv_regimen} label="ARV Regimen" required>
               <select id="arv_regimen" name="arv_regimen" value={formData.arv_regimen}
-                onChange={handleChange} style={inputStyle('arv_regimen')}>
+                onChange={handleChange} style={inputStyle(errors, 'arv_regimen')}>
                 <option value="">Select regimen</option>
                 <option value="TLD">TLD (Tenofovir/Lamivudine/Dolutegravir)</option>
                 <option value="TDF/3TC/NVP">TDF/3TC/NVP</option>
@@ -497,15 +505,15 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
           {/* ── NEXT OF KIN ── */}
           <Section title="Next of Kin" />
           <div className="form-grid">
-            <Field id="nok_name" label="Full Name" required>
+            <Field id="nok_name" error={errors.nok_name} label="Full Name" required>
               <input id="nok_name" name="nok_name" value={formData.nok_name}
                 onChange={handleChange} placeholder="Full name of next of kin"
-                style={inputStyle('nok_name')} autoComplete="off" />
+                style={inputStyle(errors, 'nok_name')} autoComplete="off" />
             </Field>
-            <Field id="nok_relationship" label="Relationship" required>
+            <Field id="nok_relationship" error={errors.nok_relationship} label="Relationship" required>
               <select id="nok_relationship" name="nok_relationship"
                 value={formData.nok_relationship} onChange={handleChange}
-                style={inputStyle('nok_relationship')}>
+                style={inputStyle(errors, 'nok_relationship')}>
                 <option value="">Select relationship</option>
                 <option value="Spouse">Spouse</option>
                 <option value="Parent">Parent</option>
@@ -516,10 +524,10 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 <option value="Guardian">Guardian</option>
               </select>
             </Field>
-            <Field id="nok_phone" label="Phone Number" required>
+            <Field id="nok_phone" error={errors.nok_phone} label="Phone Number" required>
               <input id="nok_phone" name="nok_phone" value={formData.nok_phone}
                 onChange={handleChange} placeholder="+263771234567"
-                style={inputStyle('nok_phone')} />
+                style={inputStyle(errors, 'nok_phone')} />
             </Field>
           </div>
 
