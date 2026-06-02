@@ -7,7 +7,7 @@ import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
 import PatientEditForm from './PatientEditForm';
 
-// ── ERROR BOUNDARY: Prevents the "White Screen of Death" ──
+// ── ERROR BOUNDARY ──
 class PatientsErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -49,6 +49,7 @@ class PatientsErrorBoundary extends Component {
 function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
+  // 1. STATE INITIALIZATION
   const [patients, setPatients]               = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [analyzing, setAnalyzing]             = useState(false);
@@ -59,14 +60,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const [editingPatient, setEditingPatient]   = useState(null);
   const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  useEffect(() => { 
-    setRiskFilter(initialRiskFilter || 'All'); 
-  }, [initialRiskFilter]);
-  
-  useEffect(() => { 
-    loadPatients(); 
-  }, [loadPatients]);
-
+  // 2. CALLBACK DEFINITIONS (Must be above useEffects to prevent TDZ ReferenceErrors)
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -105,6 +99,17 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
+  // 3. USE EFFECTS (Safe to call loadPatients now)
+  useEffect(() => { 
+    setRiskFilter(initialRiskFilter || 'All'); 
+  }, [initialRiskFilter]);
+  
+  useEffect(() => { 
+    loadPatients(); 
+  }, [loadPatients]);
+
+
+  // 4. BUSINESS LOGIC & HELPERS
   const runPrediction = async () => {
     if (!patients || patients.length === 0) {
       showToast({ type: 'warning', message: 'No patients to analyse.' });
@@ -229,6 +234,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     return matchesRisk && matchesSearch;
   });
 
+  // 5. RENDER
   return (
     <div className="patients-page">
 
