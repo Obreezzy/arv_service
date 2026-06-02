@@ -1,6 +1,6 @@
-// v4 - auto ART, auto pickup date, NOK required, validation
-import React, { useState, useEffect } from 'react';
-import { patientsAPI, clinicsAPI } from '../services/api';
+// v5 - fixed focus loss, auto ART, auto pickup, NOK required, per-field validation
+import React, { useState } from 'react';
+import { patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 
 const FACILITIES = [
@@ -25,16 +25,14 @@ const FACILITIES = [
 const today = new Date().toISOString().split('T')[0];
 const currentYear = new Date().getFullYear().toString().slice(-2);
 
-// Generate ART number from facility code + year + random 4-digit sequence
 const generateArtNumber = (facilityCode) => {
   if (!facilityCode) return '';
   const seq = String(Math.floor(1000 + Math.random() * 9000));
   return `CHP/${facilityCode}/${currentYear}/${seq}`;
 };
 
-// Add days to a date string, return YYYY-MM-DD
 const addDays = (dateStr, days) => {
-  if (!dateStr) return '';
+  if (!dateStr || !days) return '';
   const d = new Date(dateStr);
   d.setDate(d.getDate() + parseInt(days));
   return d.toISOString().split('T')[0];
@@ -50,69 +48,59 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
   const isAdmin = currentUser?.role === 'admin';
   const isNurse = !isAdmin;
 
+  const nurseClinic  = currentUser?.clinic_name   || '';
+  const nurseCode    = currentUser?.clinic_number || '';
+  const nurseNumber  = currentUser?.nurse_number  || '';
+
   const [formData, setFormData] = useState({
-    // Identification
-    art_number:         '',
-    enrollment_date:    today,
-    // Personal
-    first_name:         '',
-    last_name:          '',
-    date_of_birth:      '',
-    gender:             '',
-    marital_status:     '',
-    phone_number:       '',
-    alternative_phone:  '',
-    // Location
-    province:           '',
-    district:           '',
-    ward:               '',
-    village:            '',
-    headman:            '',
-    // Clinical
-    art_start_date:     today,
-    who_clinical_stage: '2',
-    arv_regimen:        '',
-    chronic_score:      '0',
-    tb_flag:            false,
-    pregnancy_flag:     false,
+    art_number:          isNurse && nurseCode ? generateArtNumber(nurseCode) : '',
+    enrollment_date:     today,
+    first_name:          '',
+    last_name:           '',
+    date_of_birth:       '',
+    gender:              '',
+    marital_status:      '',
+    phone_number:        '',
+    alternative_phone:   '',
+    province:            '',
+    district:            '',
+    ward:                '',
+    village:             '',
+    headman:             '',
+    art_start_date:      today,
+    who_clinical_stage:  '2',
+    arv_regimen:         '',
+    chronic_score:       '0',
+    tb_flag:             false,
+    pregnancy_flag:      false,
     treatment_supporter: false,
-    // Pickup
-    pickup_frequency:   '30',
-    next_pickup_date:   addDays(today, 30),
-    // Next of Kin
-    nok_name:           '',
-    nok_relationship:   '',
-    nok_phone:          '',
-    // Clinic
-    clinic_name:        isNurse ? (currentUser?.clinic_name   || '') : '',
-    clinic_number:      isNurse ? (currentUser?.clinic_number || '') : '',
-    nurse_number:       isNurse ? (currentUser?.nurse_number  || '') : '',
+    pickup_frequency:    '30',
+    next_pickup_date:    addDays(today, 30),
+    nok_name:            '',
+    nok_relationship:    '',
+    nok_phone:           '',
+    clinic_name:         isNurse ? nurseClinic : '',
+    clinic_number:       isNurse ? nurseCode   : '',
+    nurse_number:        isNurse ? nurseNumber  : '',
   });
 
-  // Auto-generate ART number when clinic is set
-  useEffect(() => {
-    if (formData.clinic_number && !formData.art_number) {
-      setFormData(prev => ({
-        ...prev,
-        art_number: generateArtNumber(formData.clinic_number)
-      }));
-    }
-  }, [formData.clinic_number]);
-
-  // Auto-recalculate next pickup date when enrollment_date or frequency changes
-  useEffect(() => {
-    if (formData.enrollment_date && formData.pickup_frequency) {
-      setFormData(prev => ({
-        ...prev,
-        next_pickup_date: addDays(formData.enrollment_date, formData.pickup_frequency)
-      }));
-    }
-  }, [formData.enrollment_date, formData.pickup_frequency]);
-
+  // ── Single handleChange — no useEffect, no focus loss ──────────────
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setErrors(prev => ({ ...prev, [name]: '' }));
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+
+    setFormData(prev => {
+      const updated = { ...prev, [name]: type === 'checkbox' ? checked : value };
+
+      // Auto-recalc next pickup date
+      if (name === 'enrollment_date' || name === 'pickup_frequency') {
+        const base = name === 'enrollment_date' ? value : prev.enrollment_date;
+        const freq = name === 'pickup_frequency' ? value  : prev.pickup_frequency;
+        updated.next_pickup_date = addDays(base, freq);
+      }
+
+      return updated;
+    });
   };
 
   const handleFacilitySelect = (facility) => {
@@ -122,6 +110,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
       clinic_name:   facility.name,
       clinic_number: facility.code,
       art_number:    artNum,
+      next_pickup_date: addDays(prev.enrollment_date, prev.pickup_frequency),
     }));
     setClinicSearch(facility.name);
     setShowDropdown(false);
@@ -133,36 +122,34 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     f.code.toLowerCase().includes(clinicSearch.toLowerCase())
   );
 
-  // Validate all fields, return true if valid
   const validate = () => {
     const e = {};
-    if (!formData.art_number.trim())      e.art_number      = 'ART Number is required.';
-    if (!formData.first_name.trim())      e.first_name      = 'First name is required.';
-    if (!formData.last_name.trim())       e.last_name       = 'Last name is required.';
-    if (!formData.date_of_birth)          e.date_of_birth   = 'Date of birth is required.';
-    if (!formData.gender)                 e.gender          = 'Gender is required.';
-    if (!formData.marital_status)         e.marital_status  = 'Marital status is required.';
-    if (!formData.phone_number.trim())    e.phone_number    = 'Phone number is required.';
-    if (!formData.arv_regimen)            e.arv_regimen     = 'ARV Regimen is required.';
-    if (!formData.who_clinical_stage)     e.who_clinical_stage = 'WHO Clinical Stage is required.';
-    if (!formData.nok_name.trim())        e.nok_name        = 'Next of kin name is required.';
-    if (!formData.nok_relationship.trim()) e.nok_relationship = 'Relationship is required.';
-    if (!formData.nok_phone.trim())       e.nok_phone       = 'Next of kin phone is required.';
-    if (!formData.clinic_name.trim())     e.clinic_name     = 'Facility assignment is required.';
+    if (!formData.art_number.trim())        e.art_number         = 'ART Number is required.';
+    if (!formData.first_name.trim())        e.first_name         = 'First name is required.';
+    if (!formData.last_name.trim())         e.last_name          = 'Last name is required.';
+    if (!formData.date_of_birth)            e.date_of_birth      = 'Date of birth is required.';
+    if (!formData.gender)                   e.gender             = 'Gender is required.';
+    if (!formData.marital_status)           e.marital_status     = 'Marital status is required.';
+    if (!formData.phone_number.trim())      e.phone_number       = 'Phone number is required.';
+    if (!formData.arv_regimen)              e.arv_regimen        = 'ARV Regimen is required.';
+    if (!formData.who_clinical_stage)       e.who_clinical_stage = 'WHO Clinical Stage is required.';
+    if (!formData.nok_name.trim())          e.nok_name           = 'Next of kin name is required.';
+    if (!formData.nok_relationship.trim())  e.nok_relationship   = 'Relationship is required.';
+    if (!formData.nok_phone.trim())         e.nok_phone          = 'Next of kin phone is required.';
+    if (!formData.clinic_name.trim())       e.clinic_name        = 'Facility assignment is required.';
 
-    // Phone format
     const phoneReg = /^\+?[0-9]{9,15}$/;
-    if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g,'')))
-      e.phone_number = 'Enter a valid phone number (e.g. +263771234567)';
-    if (formData.alternative_phone && !phoneReg.test(formData.alternative_phone.replace(/\s/g,'')))
+    if (formData.phone_number && !phoneReg.test(formData.phone_number.replace(/\s/g, '')))
+      e.phone_number = 'Enter a valid phone number e.g. +263771234567';
+    if (formData.alternative_phone && !phoneReg.test(formData.alternative_phone.replace(/\s/g, '')))
       e.alternative_phone = 'Enter a valid phone number.';
-    if (formData.nok_phone && !phoneReg.test(formData.nok_phone.replace(/\s/g,'')))
+    if (formData.nok_phone && !phoneReg.test(formData.nok_phone.replace(/\s/g, '')))
       e.nok_phone = 'Enter a valid phone number.';
 
-    // DOB range
     if (formData.date_of_birth) {
       const yr = new Date(formData.date_of_birth).getFullYear();
-      if (yr < 1947 || yr > 2008) e.date_of_birth = 'Date of birth must be between 1947 and 2008.';
+      if (yr < 1947 || yr > 2008)
+        e.date_of_birth = 'Date of birth must be between 1947 and 2008.';
     }
 
     setErrors(e);
@@ -172,12 +159,11 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) {
-      showToast({ type: 'error', message: 'Please fix the errors below.' });
+      showToast({ type: 'error', message: 'Please fix the errors highlighted below.' });
       return;
     }
     setLoading(true);
     try {
-      // Map NOK fields to emergency contact fields the backend expects
       const payload = {
         ...formData,
         emergency_contact_name:  formData.nok_name,
@@ -196,15 +182,17 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     }
   };
 
-  // Reusable field wrapper
-  const Field = ({ id, label, required, children }) => (
+  const Field = ({ id, label, required, hint, children }) => (
     <div className="form-group">
       <label htmlFor={id}>
         {label}{required && <span style={{ color: '#ef4444' }}> *</span>}
       </label>
       {children}
+      {hint && !errors[id] && (
+        <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>{hint}</small>
+      )}
       {errors[id] && (
-        <small style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '2px', display: 'block' }}>
+        <small style={{ color: '#dc2626', fontSize: '0.72rem', marginTop: '2px', display: 'block' }}>
           ⚠ {errors[id]}
         </small>
       )}
@@ -215,9 +203,15 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
     <div style={{
       fontSize: '0.72rem', fontWeight: '700', color: '#6b7280',
       textTransform: 'uppercase', letterSpacing: '0.07em',
-      margin: '1.5rem 0 0.75rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.4rem'
+      margin: '1.5rem 0 0.75rem',
+      borderBottom: '1px solid #e5e7eb',
+      paddingBottom: '0.4rem'
     }}>{title}</div>
   );
+
+  const inputStyle = (id) => ({
+    borderColor: errors[id] ? '#dc2626' : undefined
+  });
 
   return (
     <div className="modal-overlay">
@@ -229,7 +223,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
 
         <form onSubmit={handleSubmit} className="modal-body" noValidate>
 
-          {/* CLINIC ASSIGNMENT — top for admin so ART number generates early */}
+          {/* ── FACILITY ASSIGNMENT (admin only — top so ART generates early) ── */}
           {isAdmin && (
             <>
               <Section title="Facility Assignment" />
@@ -241,24 +235,28 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                       type="text"
                       value={clinicSearch}
                       onChange={(e) => {
-                        setClinicSearch(e.target.value);
+                        const v = e.target.value;
+                        setClinicSearch(v);
                         setShowDropdown(true);
-                        setFormData(prev => ({ ...prev, clinic_name: e.target.value, clinic_number: '', art_number: '' }));
+                        setFormData(prev => ({ ...prev, clinic_name: v, clinic_number: '', art_number: '' }));
+                        setErrors(prev => ({ ...prev, clinic_name: '' }));
                       }}
                       onFocus={() => setShowDropdown(true)}
                       onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                      placeholder="Search facility..."
-                      style={{ borderColor: errors.clinic_name ? '#dc2626' : '' }}
+                      placeholder="Search facility name or code..."
+                      style={inputStyle('clinic_name')}
+                      autoComplete="off"
                     />
                     {showDropdown && filteredFacilities.length > 0 && (
                       <div style={{
                         position: 'absolute', top: '100%', left: 0, right: 0,
                         background: '#fff', border: '1px solid #d1d5db',
-                        borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                        zIndex: 200, maxHeight: '200px', overflowY: 'auto'
+                        borderRadius: '6px', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                        zIndex: 300, maxHeight: '220px', overflowY: 'auto'
                       }}>
                         {filteredFacilities.map((f, i) => (
-                          <div key={i} onMouseDown={() => handleFacilitySelect(f)}
+                          <div key={i}
+                            onMouseDown={() => handleFacilitySelect(f)}
                             style={{
                               padding: '0.6rem 1rem', cursor: 'pointer',
                               borderBottom: '1px solid #f3f4f6',
@@ -280,75 +278,92 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                   </div>
                 </Field>
                 <Field id="clinic_number" label="Facility Code">
-                  <input id="clinic_number" type="text" value={formData.clinic_number}
-                    readOnly style={{ background: '#f9fafb', fontFamily: 'monospace' }}
-                    placeholder="Auto-fills" />
+                  <input
+                    id="clinic_number"
+                    type="text"
+                    value={formData.clinic_number}
+                    readOnly
+                    placeholder="Auto-fills when facility selected"
+                    style={{ background: '#f9fafb', fontFamily: 'monospace' }}
+                  />
                 </Field>
               </div>
             </>
           )}
 
-          {/* IDENTIFICATION */}
+          {/* ── PATIENT IDENTIFICATION ── */}
           <Section title="Patient Identification" />
           <div className="form-grid">
             <Field id="art_number" label="ART Number" required>
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input id="art_number" name="art_number" value={formData.art_number}
+                <input
+                  id="art_number"
+                  name="art_number"
+                  value={formData.art_number}
                   onChange={handleChange}
-                  placeholder={formData.clinic_number ? 'Auto-generated' : 'Select facility first'}
-                  style={{ borderColor: errors.art_number ? '#dc2626' : '', flex: 1 }}
+                  placeholder={formData.clinic_number ? '' : 'Select facility first'}
+                  style={{ ...inputStyle('art_number'), flex: 1, fontFamily: 'monospace' }}
                 />
                 {formData.clinic_number && (
-                  <button type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, art_number: generateArtNumber(formData.clinic_number) }))}
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      art_number: generateArtNumber(formData.clinic_number)
+                    }))}
                     style={{
-                      padding: '0.4rem 0.7rem', fontSize: '0.75rem', whiteSpace: 'nowrap',
-                      background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px',
-                      cursor: 'pointer', color: '#166534'
-                    }}>
-                    Regenerate
+                      padding: '0.4rem 0.75rem', fontSize: '0.75rem', whiteSpace: 'nowrap',
+                      background: '#f0fdf4', border: '1px solid #bbf7d0',
+                      borderRadius: '6px', cursor: 'pointer', color: '#166534', fontWeight: '600'
+                    }}
+                  >
+                    ↺ Regenerate
                   </button>
                 )}
               </div>
             </Field>
             <Field id="enrollment_date" label="Enrollment Date" required>
-              <input id="enrollment_date" type="date" name="enrollment_date"
-                value={formData.enrollment_date} onChange={handleChange} />
+              <input
+                id="enrollment_date"
+                type="date"
+                name="enrollment_date"
+                value={formData.enrollment_date}
+                onChange={handleChange}
+              />
             </Field>
           </div>
 
-          {/* PERSONAL */}
+          {/* ── PERSONAL INFORMATION ── */}
           <Section title="Personal Information" />
           <div className="form-grid">
             <Field id="first_name" label="First Name" required>
               <input id="first_name" name="first_name" value={formData.first_name}
                 onChange={handleChange} placeholder="Enter first name"
-                style={{ borderColor: errors.first_name ? '#dc2626' : '' }} />
+                style={inputStyle('first_name')} autoComplete="off" />
             </Field>
             <Field id="last_name" label="Last Name" required>
               <input id="last_name" name="last_name" value={formData.last_name}
                 onChange={handleChange} placeholder="Enter last name"
-                style={{ borderColor: errors.last_name ? '#dc2626' : '' }} />
+                style={inputStyle('last_name')} autoComplete="off" />
             </Field>
-            <Field id="date_of_birth" label="Date of Birth" required>
+            <Field id="date_of_birth" label="Date of Birth" required hint="Range: 1947 — 2008">
               <input id="date_of_birth" type="date" name="date_of_birth"
                 value={formData.date_of_birth} onChange={handleChange}
                 min="1947-01-01" max="2008-12-31"
-                style={{ borderColor: errors.date_of_birth ? '#dc2626' : '' }} />
-              <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>Range: 1947 — 2008</small>
+                style={inputStyle('date_of_birth')} />
             </Field>
             <Field id="gender" label="Gender" required>
-              <select id="gender" name="gender" value={formData.gender} onChange={handleChange}
-                style={{ borderColor: errors.gender ? '#dc2626' : '' }}>
+              <select id="gender" name="gender" value={formData.gender}
+                onChange={handleChange} style={inputStyle('gender')}>
                 <option value="">Select gender</option>
                 <option value="M">Male</option>
                 <option value="F">Female</option>
               </select>
             </Field>
-            <Field id="marital_status" label="Marital Status" required>
+            <Field id="marital_status" label="Marital Status" required hint="Used in ML risk model">
               <select id="marital_status" name="marital_status"
                 value={formData.marital_status} onChange={handleChange}
-                style={{ borderColor: errors.marital_status ? '#dc2626' : '' }}>
+                style={inputStyle('marital_status')}>
                 <option value="">Select marital status</option>
                 <option value="Single">Single</option>
                 <option value="Married">Married</option>
@@ -359,17 +374,17 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             <Field id="phone_number" label="Phone Number" required>
               <input id="phone_number" name="phone_number" value={formData.phone_number}
                 onChange={handleChange} placeholder="+263771234567"
-                style={{ borderColor: errors.phone_number ? '#dc2626' : '' }} />
+                style={inputStyle('phone_number')} />
             </Field>
             <Field id="alternative_phone" label="Alternative Phone">
               <input id="alternative_phone" name="alternative_phone"
                 value={formData.alternative_phone} onChange={handleChange}
                 placeholder="+263771234567"
-                style={{ borderColor: errors.alternative_phone ? '#dc2626' : '' }} />
+                style={inputStyle('alternative_phone')} />
             </Field>
           </div>
 
-          {/* LOCATION */}
+          {/* ── LOCATION ── */}
           <Section title="Location" />
           <div className="form-grid">
             <Field id="province" label="Province">
@@ -394,7 +409,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
           </div>
 
-          {/* CLINICAL */}
+          {/* ── CLINICAL INFORMATION ── */}
           <Section title="Clinical Information" />
           <div className="form-grid">
             <Field id="art_start_date" label="ART Start Date">
@@ -404,7 +419,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             <Field id="who_clinical_stage" label="WHO Clinical Stage" required>
               <select id="who_clinical_stage" name="who_clinical_stage"
                 value={formData.who_clinical_stage} onChange={handleChange}
-                style={{ borderColor: errors.who_clinical_stage ? '#dc2626' : '' }}>
+                style={inputStyle('who_clinical_stage')}>
                 <option value="1">Stage 1 — Asymptomatic</option>
                 <option value="2">Stage 2 — Mild Symptoms</option>
                 <option value="3">Stage 3 — Advanced</option>
@@ -413,8 +428,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             </Field>
             <Field id="arv_regimen" label="ARV Regimen" required>
               <select id="arv_regimen" name="arv_regimen" value={formData.arv_regimen}
-                onChange={handleChange}
-                style={{ borderColor: errors.arv_regimen ? '#dc2626' : '' }}>
+                onChange={handleChange} style={inputStyle('arv_regimen')}>
                 <option value="">Select regimen</option>
                 <option value="TLD">TLD (Tenofovir/Lamivudine/Dolutegravir)</option>
                 <option value="TDF/3TC/NVP">TDF/3TC/NVP</option>
@@ -426,7 +440,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               </select>
             </Field>
             <Field id="chronic_score" label="Chronic Condition Score"
-              >
+              hint="Used directly in ML risk model">
               <select id="chronic_score" name="chronic_score"
                 value={formData.chronic_score} onChange={handleChange}>
                 <option value="0">0 — None</option>
@@ -436,15 +450,14 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 <option value="4">4 — Multiple conditions</option>
                 <option value="5">5 — Critical comorbidities</option>
               </select>
-              <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>Used directly in ML risk model</small>
             </Field>
           </div>
 
           <div style={{ display: 'flex', gap: '2rem', margin: '0.75rem 0', flexWrap: 'wrap' }}>
             {[
-              { name: 'tb_flag',            label: 'TB Co-infection' },
-              { name: 'pregnancy_flag',     label: 'Pregnancy' },
-              { name: 'treatment_supporter',label: 'Has Treatment Supporter' },
+              { name: 'tb_flag',             label: 'TB Co-infection' },
+              { name: 'pregnancy_flag',      label: 'Pregnancy' },
+              { name: 'treatment_supporter', label: 'Has Treatment Supporter' },
             ].map(({ name, label }) => (
               <label key={name} style={{
                 display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -457,7 +470,7 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             ))}
           </div>
 
-          {/* PICKUP */}
+          {/* ── MEDICATION PICKUP ── */}
           <Section title="Medication Pickup" />
           <div className="form-grid">
             <Field id="pickup_frequency" label="Pickup Frequency">
@@ -469,27 +482,30 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
                 <option value="180">Every 6 Months (180 days)</option>
               </select>
             </Field>
-            <Field id="next_pickup_date" label="Next Pickup Date">
-              <input id="next_pickup_date" type="date" value={formData.next_pickup_date}
-                readOnly style={{ background: '#f9fafb', color: '#374151' }} />
-              <small style={{ color: '#6b7280', fontSize: '0.72rem' }}>
-                Auto-calculated: Enrollment date + {formData.pickup_frequency} days
-              </small>
+            <Field id="next_pickup_date" label="Next Pickup Date"
+              hint={`Auto-calculated: Enrollment date + ${formData.pickup_frequency} days`}>
+              <input
+                id="next_pickup_date"
+                type="date"
+                value={formData.next_pickup_date}
+                readOnly
+                style={{ background: '#f9fafb', color: '#374151', cursor: 'default' }}
+              />
             </Field>
           </div>
 
-          {/* NEXT OF KIN */}
+          {/* ── NEXT OF KIN ── */}
           <Section title="Next of Kin" />
           <div className="form-grid">
             <Field id="nok_name" label="Full Name" required>
               <input id="nok_name" name="nok_name" value={formData.nok_name}
                 onChange={handleChange} placeholder="Full name of next of kin"
-                style={{ borderColor: errors.nok_name ? '#dc2626' : '' }} />
+                style={inputStyle('nok_name')} autoComplete="off" />
             </Field>
             <Field id="nok_relationship" label="Relationship" required>
               <select id="nok_relationship" name="nok_relationship"
                 value={formData.nok_relationship} onChange={handleChange}
-                style={{ borderColor: errors.nok_relationship ? '#dc2626' : '' }}>
+                style={inputStyle('nok_relationship')}>
                 <option value="">Select relationship</option>
                 <option value="Spouse">Spouse</option>
                 <option value="Parent">Parent</option>
@@ -503,11 +519,11 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
             <Field id="nok_phone" label="Phone Number" required>
               <input id="nok_phone" name="nok_phone" value={formData.nok_phone}
                 onChange={handleChange} placeholder="+263771234567"
-                style={{ borderColor: errors.nok_phone ? '#dc2626' : '' }} />
+                style={inputStyle('nok_phone')} />
             </Field>
           </div>
 
-          {/* NURSE — clinic shown locked */}
+          {/* ── NURSE — clinic locked ── */}
           {isNurse && (
             <>
               <Section title="Facility Assignment" />
@@ -518,15 +534,15 @@ function PatientForm({ onClose, onSuccess, currentUser }) {
               }}>
                 <div style={{ flex: 1, minWidth: '140px' }}>
                   <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Facility</div>
-                  <div style={{ fontWeight: '600' }}>{currentUser?.clinic_name || '—'}</div>
+                  <div style={{ fontWeight: '600' }}>{nurseClinic || '—'}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: '140px' }}>
                   <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Facility Code</div>
-                  <div style={{ fontFamily: 'monospace' }}>{currentUser?.clinic_number || '—'}</div>
+                  <div style={{ fontFamily: 'monospace' }}>{nurseCode || '—'}</div>
                 </div>
                 <div style={{ flex: 1, minWidth: '140px' }}>
                   <div style={{ fontSize: '0.72rem', color: '#6b7280', marginBottom: '0.25rem' }}>Nurse Number</div>
-                  <div style={{ fontFamily: 'monospace', color: '#166534' }}>{currentUser?.nurse_number || '—'}</div>
+                  <div style={{ fontFamily: 'monospace', color: '#166534' }}>{nurseNumber || '—'}</div>
                 </div>
               </div>
             </>
