@@ -73,7 +73,7 @@ router.post('/record', async (req, res) => {
       }
     }
 
-    // Insert collection record using verified table schema columns
+    // 1. Insert collection record
     const result = await db.query(
       `INSERT INTO medication_pickups (
           patient_id, pickup_date, next_expected_date, days_supply, days_late
@@ -83,29 +83,38 @@ router.post('/record', async (req, res) => {
 
     const pickup_record = result.rows[0];
 
-    // Synchronize next schedule date to base patient record
+    // 2. Synchronize next schedule date to base patient record
     await db.query(
       'UPDATE patients SET next_pickup_date = $1 WHERE patient_id = $2',
       [computed_next_pickup, patient_id]
     );
 
-    // Remove from defaulters list safely if flagged pending
+    // 3. FULL RE-ACTIVATION LOGIC:
+    // This resolves the defaulter status AND sets the patient back to active (is_active = true)
     try {
+      // Resolve any pending defaulter status
       await db.query(
-        `UPDATE defaulters SET status = 'returned'
+        `UPDATE defaulters SET status = 'resolved'
          WHERE patient_id = $1 AND status = 'pending'`,
         [patient_id]
       );
-    } catch (defaulterErr) {
-      console.warn('Defaulters status update bypassed:', defaulterErr.message);
+      
+      // Force patient back to active
+      await db.query(
+        `UPDATE patients SET is_active = true 
+         WHERE patient_id = $1`,
+        [patient_id]
+      );
+    } catch (dbErr) {
+      console.warn('System failed to reactivate patient:', dbErr.message);
     }
 
-    // Trigger modern predictive processing to refresh metrics
+    // 4. Trigger modern predictive processing to refresh metrics
     await recalculatePatientRisk(patient_id);
 
     res.json({
       success: true,
-      message: 'Medication pickup recorded successfully. Risk score updated.',
+      message: 'Medication pickup recorded successfully. Patient reactivated.',
       pickup: pickup_record
     });
 
