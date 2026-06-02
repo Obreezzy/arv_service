@@ -1,19 +1,10 @@
 'use strict';
 
 const axios  = require('axios');
-const { Pool } = require('pg');
+const { query } = require('../config/db'); // Using your central DB configuration
 
 const ML_API_URL   = process.env.ML_API_URL || 'https://arv-service-ml.onrender.com';
 const FLASK_TIMEOUT = 8000; 
-
-const pool = new Pool({
-    host     : process.env.DB_HOST,
-    port     : process.env.DB_PORT,
-    database : process.env.DB_NAME,
-    user     : process.env.DB_USER,
-    password : process.env.DB_PASSWORD,
-    ssl      : { rejectUnauthorized: false },
-});
 
 const FEATURE_QUERY = `
 WITH patient_base AS (
@@ -151,7 +142,6 @@ const scoreToLabel = (score) => {
 const buildRiskFactors = (f, weatherBoosted = false) => {
     const factors = [];
     
-    // Core ML Behavioral Risk Factors
     if (f.missed_rate >= 0.3)            factors.push(`High missed pickup rate`);
     if (f.avg_days_late >= 7)            factors.push(`Average days late per pickup exceeds safe range`);
     if (f.who_clinical_stage >= 3)       factors.push(`Advanced WHO clinical stage`);
@@ -159,7 +149,6 @@ const buildRiskFactors = (f, weatherBoosted = false) => {
     if (f.has_supporter === 0)           factors.push(`No treatment supporter assigned`);
     if (weatherBoosted)                  factors.push(`Active Weather Alert in Area`);
 
-    // The Two-Pillar UI Integration: Clinical Alerts
     if (f.latest_cd4 > 0 && f.latest_cd4 < 200) {
         factors.push(`CLINICAL EMERGENCY: CD4 critically low (${f.latest_cd4})`);
     } else if (f.latest_cd4 >= 500 && f.latest_vl_suppressed === 1) {
@@ -177,27 +166,29 @@ const buildRiskFactors = (f, weatherBoosted = false) => {
     return factors.length ? factors : ['No significant risk flags identified'];
 };
 
-const saveToAuditTrail = async (client, patientId, score, label, source, features, factors) => {
+const saveToAuditTrail = async (patientId, score, label, source, features, factors) => {
+    // 1. FORCE MASTER UPDATE FIRST - Do not let this fail silently
     try {
-        // 1. Save to the audit/history log
-        await client.query(
+        await query(
+            `UPDATE patients 
+             SET risk_score = $1, risk_level = $2, risk_factors = $3 
+             WHERE patient_id = $4`,
+            [score, label, JSON.stringify(factors), patientId]
+        );
+    } catch (err) {
+        console.error(`CRITICAL: Failed to update master patients table for ${patientId}:`, err.message);
+    }
+
+    // 2. SAVE HISTORY SEPARATELY - If this breaks, the master table is already safe
+    try {
+        await query(
             `INSERT INTO risk_scores
                 (patient_id, risk_score, risk_label, prediction_source, feature_snapshot, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())`,
             [patientId, score, label, source, JSON.stringify(features)]
         );
-
-        // 2. IMPORTANT FIX: Update the master patients table so it persists on refresh!
-        await client.query(
-            `UPDATE patients 
-             SET risk_score = $1, 
-                 risk_level = $2, 
-                 risk_factors = $3 
-             WHERE patient_id = $4`,
-            [score, label, JSON.stringify(factors), patientId]
-        );
-    } catch (auditErr) {
-        console.error(`Audit trail or patient update failed for patient ${patientId}:`, auditErr.message);
+    } catch (err) {
+        console.error(`Audit log failed for ${patientId} (Master table still updated):`, err.message);
     }
 };
 
@@ -216,7 +207,7 @@ const scoreOnePatient = async (features, activeWeatherAlerts = []) => {
         predictionSource = 'ml_model';
     } catch (flaskErr) {
         console.error(`[riskEngine] ML Strict Mode: Flask unavailable (${flaskErr.message}).`);
-        throw new Error(`Strict ML Test Failed: Unable to reach or process the Python Flask API. Reason: ${flaskErr.message}`);
+        throw new Error(`Strict ML Test Failed: Unable to reach or process the Python Flask API.`);
     }
 
     const weatherBoosted = activeWeatherAlerts.length > 0 &&
@@ -236,54 +227,41 @@ const scoreOnePatient = async (features, activeWeatherAlerts = []) => {
 };
 
 const calculateRiskScore = async (patientId, activeWeatherAlerts = []) => {
-    const client = await pool.connect();
-    try {
-        const { rows } = await client.query(FEATURE_QUERY, [[patientId]]);
-        if (!rows.length) {
-            throw new Error(`Patient ${patientId} not found or has no database rows.`);
-        }
-        const features = rows[0];
-        const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
-        
-        // Pass factors into the save function so they can be written to the master table
-        await saveToAuditTrail(client, patientId, score, label, predictionSource, features, factors);
-        
-        return { patientId, patient_id: patientId, score, label, factors, predictionSource, features };
-    } finally {
-        client.release();
+    const { rows } = await query(FEATURE_QUERY, [[patientId]]);
+    if (!rows.length) {
+        throw new Error(`Patient ${patientId} not found or has no database rows.`);
     }
+    const features = rows[0];
+    const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
+    
+    await saveToAuditTrail(patientId, score, label, predictionSource, features, factors);
+    
+    return { patientId, patient_id: patientId, score, label, factors, predictionSource, features };
 };
 
 const batchCalculateRisk = async (patientIds, activeWeatherAlerts = []) => {
     if (!patientIds || !patientIds.length) return [];
-    const client = await pool.connect();
-    try {
-        const { rows } = await client.query(FEATURE_QUERY, [patientIds]);
-        if (!rows.length) return [];
+    
+    const { rows } = await query(FEATURE_QUERY, [patientIds]);
+    if (!rows.length) return [];
 
-        const results = await Promise.all(
-            rows.map(async (features) => {
-                const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
-                
-                // Pass factors into the save function
-                await saveToAuditTrail(client, features.patient_id, score, label, predictionSource, features, factors);
-                
-                return {
-                    patientId        : features.patient_id,
-                    patient_id       : features.patient_id,
-                    score,
-                    label,
-                    factors,
-                    predictionSource,
-                };
-            })
-        );
+    const results = await Promise.all(
+        rows.map(async (features) => {
+            const { score, label, factors, predictionSource } = await scoreOnePatient(features, activeWeatherAlerts);
+            await saveToAuditTrail(features.patient_id, score, label, predictionSource, features, factors);
+            return {
+                patientId        : features.patient_id,
+                patient_id       : features.patient_id,
+                score,
+                label,
+                factors,
+                predictionSource,
+            };
+        })
+    );
 
-        const resultMap = Object.fromEntries(results.map(r => [r.patientId, r]));
-        return patientIds.map(id => resultMap[id] || null).filter(Boolean);
-    } finally {
-        client.release();
-    }
+    const resultMap = Object.fromEntries(results.map(r => [r.patientId, r]));
+    return patientIds.map(id => resultMap[id] || null).filter(Boolean);
 };
 
 const checkMLHealth = async () => {
@@ -293,7 +271,6 @@ const checkMLHealth = async () => {
         return true;
     } catch (err) {
         console.warn('ML Risk Engine offline - STRICT MODE: Predictions will fail until ML is restored.');
-        console.warn(`Expected at: ${ML_API_URL}`);
         return false;
     }
 };
