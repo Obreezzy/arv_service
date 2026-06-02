@@ -96,9 +96,18 @@ router.post('/', async (req, res) => {
 
         const nokName  = nok_name  || emergency_contact_name  || null;
         const nokPhone = nok_phone || emergency_contact_phone || null;
+        
+        const isSupporter = treatment_supporter === true || treatment_supporter === 'true';
 
-        // COMBINE first and last name to satisfy DB NOT NULL constraint
+        // --- BULLETPROOFING LEGACY COLUMNS ---
         const fullName = `${first_name || ''} ${last_name || ''}`.trim(); 
+        const genderM = gender === 'M';
+        const functionalEnc = 0; // Default to Working
+        
+        let maritalEnc = 0; // Default Single
+        if (marital_status === 'Married') maritalEnc = 1;
+        else if (marital_status === 'Divorced') maritalEnc = 2;
+        else if (marital_status === 'Widowed') maritalEnc = 3;
 
         const result = await query(
             `INSERT INTO patients (
@@ -111,11 +120,13 @@ router.post('/', async (req, res) => {
                 created_by, clinic_name, clinic_number, nurse_number,
                 marital_status, treatment_supporter,
                 who_clinical_stage, art_start_date,
-                chronic_score, tb_flag, pregnancy_flag, gender_m
+                chronic_score, tb_flag, pregnancy_flag,
+                gender_m, marital_enc, functional_enc, has_supporter
             ) VALUES (
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
                 $11,$12,$13,$14,$15,$16,$17,$18,
-                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31
+                $19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
+                $31,$32,$33,$34
             ) RETURNING *`,
             [
                 art_number   || `CHP/UNKNOWN/${new Date().getFullYear().toString().slice(-2)}/${Date.now()}`,
@@ -142,13 +153,16 @@ router.post('/', async (req, res) => {
                 clinic_number || null,
                 nurse_number  || null,
                 marital_status   || null,
-                treatment_supporter === true || treatment_supporter === 'true' ? true : false,
+                isSupporter,
                 parseInt(who_clinical_stage) || 2,
                 art_start_date || null,
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                gender === 'M' // $31 -> satisfies gender_m NOT NULL constraint
+                genderM,       // $31 legacy
+                maritalEnc,    // $32 legacy
+                functionalEnc, // $33 legacy
+                isSupporter    // $34 legacy
             ]
         );
 
@@ -232,8 +246,17 @@ router.put('/:id', async (req, res) => {
 
     const nokName  = nok_name  || emergency_contact_name  || null;
     const nokPhone = nok_phone || emergency_contact_phone || null;
+    const isSupporter = treatment_supporter === true || treatment_supporter === 'true';
     
+    // --- BULLETPROOFING LEGACY COLUMNS ---
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
+    const genderM = gender === 'M';
+    const functionalEnc = 0; 
+    
+    let maritalEnc = 0;
+    if (marital_status === 'Married') maritalEnc = 1;
+    else if (marital_status === 'Divorced') maritalEnc = 2;
+    else if (marital_status === 'Widowed') maritalEnc = 3;
 
     try {
         const result = await query(
@@ -247,8 +270,9 @@ router.put('/:id', async (req, res) => {
                 clinic_name=$18, clinic_number=$19, nurse_number=$20,
                 marital_status=$21, treatment_supporter=$22,
                 who_clinical_stage=$23, art_start_date=$24,
-                chronic_score=$25, tb_flag=$26, pregnancy_flag=$27, gender_m=$28
-             WHERE patient_id=$29 RETURNING *`,
+                chronic_score=$25, tb_flag=$26, pregnancy_flag=$27,
+                gender_m=$28, marital_enc=$29, functional_enc=$30, has_supporter=$31
+             WHERE patient_id=$32 RETURNING *`,
             [
                 first_name, 
                 last_name, 
@@ -271,14 +295,17 @@ router.put('/:id', async (req, res) => {
                 clinic_number || null,
                 nurse_number  || null,
                 marital_status || null,
-                treatment_supporter === true || treatment_supporter === 'true' ? true : false,
+                isSupporter,
                 parseInt(who_clinical_stage) || 2,
                 art_start_date || null,
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                gender === 'M', // $28 -> satisfies gender_m NOT NULL constraint
-                req.params.id,  // $29
+                genderM,       // $28 legacy
+                maritalEnc,    // $29 legacy
+                functionalEnc, // $30 legacy
+                isSupporter,   // $31 legacy
+                req.params.id, // $32
             ]
         );
 
