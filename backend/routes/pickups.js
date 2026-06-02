@@ -76,7 +76,6 @@ router.post('/record', async (req, res) => {
     }
 
     // 3. Bulletproof INSERT into medication_pickups 
-    // We only use columns guaranteed to exist in your Neon DB schema
     const result = await db.query(
       `INSERT INTO medication_pickups (
           patient_id, 
@@ -103,11 +102,16 @@ router.post('/record', async (req, res) => {
     );
 
     // 5. If they were marked as a defaulter, mark them as returned
-    await db.query(
-      `UPDATE defaulters SET status = 'returned', resolved_date = CURRENT_TIMESTAMP
-       WHERE patient_id = $1 AND status = 'pending'`,
-      [patient_id]
-    );
+    // Wrapped in a try/catch so schema issues here NEVER block the pickup process
+    try {
+        await db.query(
+          `UPDATE defaulters SET status = 'returned'
+           WHERE patient_id = $1 AND status = 'pending'`,
+          [patient_id]
+        );
+    } catch (defaulterErr) {
+        console.warn('Could not update defaulters status (non-fatal):', defaulterErr.message);
+    }
 
     // 6. Recalculate AI Risk Score based on this new behavior
     await recalculatePatientRisk(patient_id);
