@@ -48,6 +48,7 @@ function Patients({ initialRiskFilter = 'All', currentUser }) {
     setSelectedPatient(null);
     setEditingPatient(p);
   }, []);
+  const handleCloseEdit    = useCallback(() => setEditingPatient(null), []);
   const handleSearchChange = useCallback((e) => setSearchQuery(e.target.value), []);
   const handleEditSaved = useCallback(() => {
     setEditingPatient(null);
