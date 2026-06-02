@@ -6,7 +6,7 @@ const { calculateRiskScore } = require('../services/riskEngine');
 
 router.use(verifyToken);
 
-// PREDICT RISK FOR ALL PATIENTS — delegates to riskEngine which queries DB itself
+// PREDICT RISK FOR ALL PATIENTS
 router.post('/predict', async (req, res) => {
     const weatherAlerts = req.body.weatherAlerts || req.body.activeWeatherAlerts || [];
     try {
@@ -19,7 +19,6 @@ router.post('/predict', async (req, res) => {
         const { batchCalculateRisk } = require('../services/riskEngine');
         const results = await batchCalculateRisk(patientIds, weatherAlerts);
 
-        // Write scores back to patients table
         for (const r of results) {
             await query(
                 `UPDATE patients SET risk_score=$1, risk_level=$2, risk_factors=$3 WHERE patient_id=$4`,
@@ -34,12 +33,16 @@ router.post('/predict', async (req, res) => {
     }
 });
 
-// GET ALL PATIENTS
+// GET ALL PATIENTS - Now auto-formats the display ID natively
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
             SELECT *,
-                TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) AS display_name
+                TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) AS display_name,
+                COALESCE(
+                    patient_number, 
+                    CASE WHEN art_number LIKE 'P-%' THEN art_number ELSE 'P-' || LPAD(patient_id::text, 4, '0') END
+                ) AS display_id
             FROM patients
             ORDER BY risk_score DESC NULLS LAST, last_name ASC
         `);
@@ -50,7 +53,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET /api/clinics — returns distinct clinics from registered users
+// GET CLINICS
 router.get('/clinics', async (req, res) => {
   try {
     const result = await query(`
@@ -67,7 +70,7 @@ router.get('/clinics', async (req, res) => {
   }
 });
 
-// CREATE PATIENT
+// CREATE PATIENT - Now auto-generates P-XXXX ID after insertion
 router.post('/', async (req, res) => {
     const {
         art_number, first_name, last_name, date_of_birth, gender,
@@ -96,15 +99,13 @@ router.post('/', async (req, res) => {
 
         const nokName  = nok_name  || emergency_contact_name  || null;
         const nokPhone = nok_phone || emergency_contact_phone || null;
-        
         const isSupporter = treatment_supporter === true || treatment_supporter === 'true';
 
-        // --- BULLETPROOFING LEGACY COLUMNS ---
         const fullName = `${first_name || ''} ${last_name || ''}`.trim(); 
         const genderM = gender === 'M';
-        const functionalEnc = 0; // Default to Working
+        const functionalEnc = 0; 
         
-        let maritalEnc = 0; // Default Single
+        let maritalEnc = 0; 
         if (marital_status === 'Married') maritalEnc = 1;
         else if (marital_status === 'Divorced') maritalEnc = 2;
         else if (marital_status === 'Widowed') maritalEnc = 3;
@@ -159,15 +160,25 @@ router.post('/', async (req, res) => {
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                genderM,       // $31 legacy
-                maritalEnc,    // $32 legacy
-                functionalEnc, // $33 legacy
-                isSupporter    // $34 legacy
+                genderM,       
+                maritalEnc,    
+                functionalEnc, 
+                isSupporter    
             ]
         );
 
         const newPatient = result.rows[0];
 
+        // --- AUTO-GENERATE SHORT P-XXXX ID based on Primary Key ---
+        const generatedPatientNumber = `P-${String(newPatient.patient_id).padStart(4, '0')}`;
+        await query(
+            `UPDATE patients SET patient_number = $1 WHERE patient_id = $2`,
+            [generatedPatientNumber, newPatient.patient_id]
+        );
+        newPatient.patient_number = generatedPatientNumber;
+        newPatient.display_id = generatedPatientNumber;
+
+        // Run ML Risk Score
         try {
             const { calculateRiskScore: scoreById } = require('../services/riskEngine');
             const initialPrediction = await scoreById(newPatient.patient_id, []);
@@ -248,7 +259,6 @@ router.put('/:id', async (req, res) => {
     const nokPhone = nok_phone || emergency_contact_phone || null;
     const isSupporter = treatment_supporter === true || treatment_supporter === 'true';
     
-    // --- BULLETPROOFING LEGACY COLUMNS ---
     const fullName = `${first_name || ''} ${last_name || ''}`.trim();
     const genderM = gender === 'M';
     const functionalEnc = 0; 
@@ -301,11 +311,11 @@ router.put('/:id', async (req, res) => {
                 parseInt(chronic_score) || 0,
                 tb_flag        === true || tb_flag        === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                genderM,       // $28 legacy
-                maritalEnc,    // $29 legacy
-                functionalEnc, // $30 legacy
-                isSupporter,   // $31 legacy
-                req.params.id, // $32
+                genderM,       
+                maritalEnc,    
+                functionalEnc, 
+                isSupporter,   
+                req.params.id, 
             ]
         );
 

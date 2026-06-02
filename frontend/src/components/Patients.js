@@ -7,7 +7,7 @@ import PatientFormModal from './PatientForm';
 import PatientDetailsModal from './PatientDetailsModal';
 import PatientEditForm from './PatientEditForm';
 
-// ── ERROR BOUNDARY ──
+// ERROR BOUNDARY
 class PatientsErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -45,11 +45,11 @@ class PatientsErrorBoundary extends Component {
   }
 }
 
-// ── MAIN COMPONENT ──
+// MAIN COMPONENT
 function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const { showToast } = useNotifications();
 
-  // 1. STATE INITIALIZATION
+  // STATE INITIALIZATION
   const [patients, setPatients]               = useState([]);
   const [loading, setLoading]                 = useState(true);
   const [analyzing, setAnalyzing]             = useState(false);
@@ -60,7 +60,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   const [editingPatient, setEditingPatient]   = useState(null);
   const [activeAlerts, setActiveAlerts]       = useState([]);
 
-  // 2. CALLBACK DEFINITIONS
+  // CALLBACK DEFINITIONS
   const loadPatients = useCallback(async () => {
     try {
       setLoading(true);
@@ -99,7 +99,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
-  // 3. USE EFFECTS
+  // USE EFFECTS
   useEffect(() => { 
     setRiskFilter(initialRiskFilter || 'All'); 
   }, [initialRiskFilter]);
@@ -109,7 +109,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   }, [loadPatients]);
 
 
-  // 4. BUSINESS LOGIC & HELPERS
+  // BUSINESS LOGIC & HELPERS
   const runPrediction = async () => {
     if (!patients || patients.length === 0) {
       showToast({ type: 'warning', message: 'No patients to analyse.' });
@@ -227,6 +227,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     const fullName = `${p.first_name || ''} ${p.last_name || ''}`.toLowerCase();
     
     const matchesSearch =
+      (p.display_id || '').toLowerCase().includes(s) ||
       (p.patient_number || '').toLowerCase().includes(s) ||
       (p.phone_number || '').toLowerCase().includes(s) ||
       (p.first_name || '').toLowerCase().includes(s) ||
@@ -236,7 +237,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     return matchesRisk && matchesSearch;
   });
 
-  // 5. RENDER
+  // RENDER
   return (
     <div className="patients-page">
 
@@ -348,7 +349,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
 
                       <td className="fw-bold">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          {p.patient_number || 'UNKNOWN'}
+                          {p.display_id || 'UNKNOWN'}
                           {effective.boosted && (
                             <span
                               className="weather-warning-icon"
@@ -452,7 +453,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
   );
 }
 
-// ── EXPORT THE BOUNDARY WRAPPED VERSION ──
+// EXPORT THE BOUNDARY WRAPPED VERSION
 export default function Patients(props) {
   return (
     <PatientsErrorBoundary>
