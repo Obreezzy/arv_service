@@ -11,22 +11,40 @@ import { Doughnut } from 'react-chartjs-2';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
-
-
-
 function Dashboard({ onNavigate, currentUser }) {
   const { showToast } = useNotifications();
 
+  // State
   const [stats, setStats] = useState({
     totalPatients: 0, activePatients: 0, activeDefaulters: 0,
     highRisk: 0, mediumRisk: 0, adherenceRate: 0
   });
   const [loading, setLoading]                 = useState(true);
+  const [mlStatus, setMlStatus]               = useState('checking'); // New: ML Status tracking
   const [sendingSMS, setSendingSMS]           = useState(false);
   const [showPickupForm, setShowPickupForm]   = useState(false);
   const [showPatientForm, setShowPatientForm] = useState(false);
 
-  useEffect(() => { fetchDashboardData(); }, []);
+  // Initial Data Fetch
+  useEffect(() => { 
+    fetchDashboardData(); 
+  }, []);
+
+  // New: ML Health Check Polling
+  useEffect(() => {
+    const checkMlHealth = async () => {
+      try {
+        const response = await fetch('https://arv-service-ml.onrender.com/health', { method: 'GET' });
+        setMlStatus(response.ok ? 'online' : 'offline');
+      } catch (err) {
+        setMlStatus('offline');
+      }
+    };
+
+    checkMlHealth();
+    const interval = setInterval(checkMlHealth, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchDashboardData = async () => {
     try {
@@ -39,10 +57,8 @@ function Dashboard({ onNavigate, currentUser }) {
       const patients   = patientsRes.patients   || patientsRes.data   || [];
       const defaulters = defaultersRes.defaulters || defaultersRes.data || [];
       
-      // Active patients (non-defaulters)
       const activePatients = patients.filter(p => p.is_active !== false).length;
 
-      // FIX: Count risk levels across BOTH active patients and current defaulters
       const predictedHighRisk = 
         patients.filter(p => p.risk_level?.toLowerCase() === 'high').length +
         defaulters.filter(d => d.risk_level?.toLowerCase() === 'high').length;
@@ -83,8 +99,6 @@ function Dashboard({ onNavigate, currentUser }) {
     }
   };
 
-
-
   const riskChartData = {
     labels: ['High Risk', 'Medium Risk', 'Low Risk'],
     datasets: [{ 
@@ -112,8 +126,6 @@ function Dashboard({ onNavigate, currentUser }) {
 
   return (
     <div className="dashboard">
-
-
       <div className="stats-grid">
         <StatCard title="Total Patients" value={stats.totalPatients} iconNode={<Users size={32} color="#3b82f6" />} color="#3b82f6" />
         <StatCard title="Adherence Rate" value={`${stats.adherenceRate}%`} iconNode={<CheckCircle size={32} color="#10b981" />} color="#10b981" />
@@ -149,11 +161,15 @@ function Dashboard({ onNavigate, currentUser }) {
             <div className="alert-body"><span className="big-number orange">{stats.mediumRisk}</span><p>Patients requiring monitoring to prevent default.</p></div>
             <button className="btn-action orange" onClick={() => onNavigate ? onNavigate('patients', 'Medium') : null}>Review Patients</button>
           </div>
+          {/* Dynamic AI Engine Status Card */}
           <div className="ai-alert-card system-ok">
-            <div className="alert-header"><Activity size={20} color="#3b82f6" /><h4>AI Engine Status</h4></div>
+            <div className="alert-header">
+                <Activity size={20} color={mlStatus === 'online' ? '#3b82f6' : '#ef4444'} />
+                <h4>AI Engine Status</h4>
+            </div>
             <div className="alert-body">
-              <span className="status-indicator online">ONLINE</span>
-              <p>Predictive models active.</p>
+              <span className={`status-indicator ${mlStatus}`}>{mlStatus.toUpperCase()}</span>
+              <p>{mlStatus === 'online' ? 'Predictive models active.' : 'System offline. Using fallback scores.'}</p>
             </div>
           </div>
         </div>
