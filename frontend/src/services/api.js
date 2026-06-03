@@ -34,7 +34,7 @@ export const dashboardAPI = {
 };
 
 export const patientsAPI = {
-  deletePatient: (id) => axiosInstance.delete(`/api/patients/${id}`).then(res => res.data),
+  deletePatient: async (id) => { const response = await api.delete(`/patients/${id}`); return response.data; },
   getAllPatients: async () => { const response = await api.get('/patients'); return response.data; },
   getPatientById: async (id) => { const response = await api.get(`/patients/${id}`); return response.data; },
   createPatient: async (patientData) => { const response = await api.post('/patients', patientData); return response.data; },
@@ -81,6 +81,5 @@ export const labsAPI = {
       const response = await api.get(`/labs/patient/${patientId}`); return response.data; 
   }
 };
-
 
 export default api;
