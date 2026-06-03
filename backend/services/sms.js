@@ -1,7 +1,8 @@
 const twilio = require('twilio');
 require('dotenv').config();
 
-const DEVELOPMENT_MODE = process.env.SMS_DEV_MODE === 'true';
+// FORCE PRODUCTION MODE FOR CAPSTONE DEMO
+const DEVELOPMENT_MODE = false;
 
 let client = null;
 if (!DEVELOPMENT_MODE) {
@@ -15,24 +16,10 @@ if (!DEVELOPMENT_MODE) {
 const SMS_SERVICE = {
   async sendSMS(phoneNumber, message) {
     try {
-      console.log(`Sending SMS to ${phoneNumber}`);
-
-      if (DEVELOPMENT_MODE) {
-        console.log('DEV MODE: Simulating SMS send');
-        console.log(`To: ${phoneNumber}`);
-        console.log(`Message: ${message}`);
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return {
-          success: true,
-          messageSid: 'DEV_' + Date.now(),
-          status: 'sent_dev_mode',
-          to: phoneNumber,
-          devMode: true
-        };
-      }
+      console.log(`Sending REAL SMS to ${phoneNumber}`);
 
       if (!client) {
-        throw new Error('Twilio client not initialized. Check your credentials.');
+        throw new Error('Twilio client not initialized. Check your TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN in Render Environment Variables.');
       }
 
       const response = await client.messages.create({
@@ -41,7 +28,7 @@ const SMS_SERVICE = {
         to: phoneNumber
       });
 
-      console.log(`SMS sent! SID: ${response.sid}`);
+      console.log(`SMS sent successfully! SID: ${response.sid}`);
       return {
         success: true,
         messageSid: response.sid,
@@ -50,7 +37,7 @@ const SMS_SERVICE = {
       };
 
     } catch (error) {
-      console.error('SMS failed:', error.message);
+      console.error('Twilio SMS failed:', error.message);
       return { success: false, error: error.message };
     }
   },
