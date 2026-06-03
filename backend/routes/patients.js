@@ -6,7 +6,6 @@ const { calculateRiskScore } = require('../services/riskEngine');
 
 router.use(verifyToken);
 
-// PREDICT RISK FOR ALL PATIENTS
 router.post('/predict', async (req, res) => {
     const weatherAlerts = req.body.weatherAlerts || req.body.activeWeatherAlerts || [];
     try {
@@ -33,7 +32,6 @@ router.post('/predict', async (req, res) => {
     }
 });
 
-// GET ALL PATIENTS
 router.get('/', async (req, res) => {
     try {
         const result = await query(`
@@ -53,7 +51,6 @@ router.get('/', async (req, res) => {
     }
 });
 
-// GET CLINICS
 router.get('/clinics', async (req, res) => {
   try {
     const result = await query(`
@@ -70,7 +67,6 @@ router.get('/clinics', async (req, res) => {
   }
 });
 
-// CREATE PATIENT
 router.post('/', async (req, res) => {
     const {
         art_number, first_name, last_name, date_of_birth, gender,
@@ -110,7 +106,6 @@ router.post('/', async (req, res) => {
         else if (marital_status === 'Divorced') maritalEnc = 2;
         else if (marital_status === 'Widowed') maritalEnc = 3;
 
-        // --- DYNAMIC ART NUMBER COLLISION RESOLUTION ---
         let finalArtNumber = art_number ? art_number.trim() : null;
         if (!finalArtNumber) {
             const currentYear = new Date().getFullYear().toString().slice(-2);
@@ -256,7 +251,6 @@ router.post('/', async (req, res) => {
     }
 });
 
-// GET SINGLE PATIENT
 router.get('/:id', async (req, res) => {
     try {
         const result = await query('SELECT * FROM patients WHERE patient_id = $1', [req.params.id]);
@@ -268,7 +262,6 @@ router.get('/:id', async (req, res) => {
     }
 });
 
-// UPDATE PATIENT
 router.put('/:id', async (req, res) => {
     const {
         first_name, last_name, date_of_birth, gender, phone_number,
@@ -358,13 +351,12 @@ router.put('/:id', async (req, res) => {
     }
 });
 
-// DELETE PATIENT (Hard delete including all history)
+
 router.delete('/:id', async (req, res) => {
     const patientId = parseInt(req.params.id);
     
     try {
-        // 1. Safely delete child records. 
-        // Wrapped in individual try/catch blocks so missing tables don't crash the server.
+
         const childTables = [
             'risk_scores', 
             'medication_pickups', 
@@ -380,11 +372,10 @@ router.delete('/:id', async (req, res) => {
             try {
                 await query(`DELETE FROM ${table} WHERE patient_id = $1`, [patientId]);
             } catch (tableErr) {
-                // Silently ignore if the table does not exist in the database
+            
             }
         }
 
-        // 2. Delete the master patient record
         const result = await query('DELETE FROM patients WHERE patient_id = $1 RETURNING *', [patientId]);
 
         if (result.rows.length === 0) {

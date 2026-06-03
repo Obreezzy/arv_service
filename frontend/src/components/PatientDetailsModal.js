@@ -9,7 +9,6 @@ function PatientDetailsModal({ patient, onClose, onEdit }) {
   const [pickups, setPickups]             = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  // AI prediction state
   const [predicting, setPredicting]       = useState(false);
   const [prediction, setPrediction]       = useState(null);   
   const [predError, setPredError]         = useState(null);

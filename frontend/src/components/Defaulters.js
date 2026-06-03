@@ -35,7 +35,6 @@ function Defaulters({ currentUser }) {
     }
   };
 
-  // NEW: Delete Patient Logic for Defaulters List
   const handleDeletePatient = async (patient) => {
     if (!window.confirm(`CRITICAL WARNING: Are you sure you want to permanently delete ${patient.first_name} ${patient.last_name}? This will erase their entire clinical history and remove them from the system forever.`)) {
       return;

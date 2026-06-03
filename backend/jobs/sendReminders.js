@@ -119,9 +119,6 @@ const sendRemindersJob = async (daysAhead = 3) => {
     }
 };
 
-// ============================================
-// Convert YYYY-MM-DD to DD-MM-YYYY for SMS
-// ============================================
 const convertToDisplayDate = (yyyymmdd) => {
     if (!yyyymmdd) return '';
     const date = new Date(yyyymmdd);

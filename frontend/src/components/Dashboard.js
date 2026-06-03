@@ -14,7 +14,6 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 function Dashboard({ onNavigate, currentUser }) {
   const { showToast } = useNotifications();
 
-  // State
   const [stats, setStats] = useState({
     totalPatients: 0, activePatients: 0, activeDefaulters: 0,
     highRisk: 0, mediumRisk: 0, adherenceRate: 0
@@ -25,12 +24,11 @@ function Dashboard({ onNavigate, currentUser }) {
   const [showPickupForm, setShowPickupForm]   = useState(false);
   const [showPatientForm, setShowPatientForm] = useState(false);
 
-  // Initial Data Fetch
+  
   useEffect(() => { 
     fetchDashboardData(); 
   }, []);
 
-  // AI Health Check Polling
   useEffect(() => {
     const checkMlHealth = async () => {
       try {
@@ -56,11 +54,9 @@ function Dashboard({ onNavigate, currentUser }) {
       const patients   = (patientsRes.patients || patientsRes.data || []);
       const defaulters = (defaultersRes.defaulters || defaultersRes.data || []);
       
-      // The absolute total of everyone in your system
       const totalSystemPatients = patients.length; 
       const activeDefaulterCount = defaulters.length;
       
-      // Mathematical fix: Active/Adherent patients ONLY
       const adherentCount = Math.max(0, totalSystemPatients - activeDefaulterCount);
       
       const adherenceRate = totalSystemPatients > 0 
@@ -71,8 +67,6 @@ function Dashboard({ onNavigate, currentUser }) {
       const mediumRiskCount = patients.filter(p => p.risk_level?.toLowerCase() === 'medium').length;
 
       setStats({
-        // By setting totalPatients to adherentCount, the dashboard card 
-        // will now drop when someone defaults, and increase when they return!
         totalPatients: adherentCount, 
         activePatients: adherentCount,
         activeDefaulters: activeDefaulterCount,
@@ -156,7 +150,7 @@ function Dashboard({ onNavigate, currentUser }) {
             <button className="btn-action red" onClick={() => onNavigate ? onNavigate('patients', 'High') : null}>Review Patients</button>
           </div>
           <div className="ai-alert-card medium-risk">
-            <div className="alert-header"><span className="alert-icon">🟠</span><h4>Medium Risk Candidates</h4></div>
+            <div className="alert-header"><span className="alert-icon"></span><h4>Medium Risk Candidates</h4></div>
             <div className="alert-body"><span className="big-number orange">{stats.mediumRisk}</span><p>Patients requiring monitoring to prevent default.</p></div>
             <button className="btn-action orange" onClick={() => onNavigate ? onNavigate('patients', 'Medium') : null}>Review Patients</button>
           </div>
@@ -167,7 +161,7 @@ function Dashboard({ onNavigate, currentUser }) {
             </div>
             <div className="alert-body">
               <span className={`status-indicator ${mlStatus}`}>{mlStatus.toUpperCase()}</span>
-              <p>{mlStatus === 'online' ? 'Predictive models active.' : 'System offline. Using fallback scores.'}</p>
+              <p>{mlStatus === 'online' ? 'Predictive models active.' : 'System offline!'}</p>
             </div>
           </div>
         </div>

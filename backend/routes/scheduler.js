@@ -33,7 +33,6 @@ router.get('/jobs', verifyRole(['admin']), (req, res) => {
 router.post('/trigger/detect-defaulters', async (req, res) => {
     try {
         console.log('Manual trigger: Defaulter Detection');
-        // Fallback to 'Unknown User' if username isn't in the token
         const username = req.user?.username || 'Authorized Staff';
         console.log('Triggered by:', username);
 
@@ -55,8 +54,6 @@ router.post('/trigger/detect-defaulters', async (req, res) => {
     }
 });
 
-
-// MANUALLY TRIGGER REMINDERS 
 
 router.post('/trigger/send-reminders', async (req, res) => {
     try {
@@ -85,8 +82,6 @@ router.post('/trigger/send-reminders', async (req, res) => {
     }
 });
 
-
-// ROUTE 4: GET SCHEDULER STATUS 
 
 router.get('/status', verifyRole(['admin']), (req, res) => {
     try {

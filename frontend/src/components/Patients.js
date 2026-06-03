@@ -95,7 +95,6 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     loadPatients();
   }, [loadPatients]);
 
-  // NEW: Delete Patient Logic
   const handleDeletePatient = async (patient) => {
     if (!window.confirm(`CRITICAL WARNING: Are you sure you want to permanently delete ${patient.first_name} ${patient.last_name}? This will erase their entire clinical history, lab results, and pickup logs. This cannot be undone.`)) {
       return;

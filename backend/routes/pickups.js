@@ -8,7 +8,6 @@ const calculateNextPickupDate = (pickupDate, frequencyDays) => {
   return date.toISOString().split('T')[0];
 };
 
-// HELPER: Recalculate and save risk using the modern 28-feature ML Risk Engine
 const recalculatePatientRisk = async (patient_id) => {
   try {
     const { calculateRiskScore } = require('../services/riskEngine');
@@ -25,7 +24,6 @@ const recalculatePatientRisk = async (patient_id) => {
   }
 };
 
-// POST /api/pickups/record
 router.post('/record', async (req, res) => {
   try {
     const {
@@ -37,7 +35,6 @@ router.post('/record', async (req, res) => {
     if (!patient_id) throw new Error('patient_id is required');
     if (!pickup_date) throw new Error('pickup_date is required');
 
-    // Get patient metadata
     const patientCheck = await db.query(
       `SELECT patient_id, first_name, last_name, pickup_frequency, arv_regimen
        FROM patients WHERE patient_id = $1`,
@@ -56,7 +53,6 @@ router.post('/record', async (req, res) => {
       (new Date(computed_next_pickup) - new Date(pickup_date)) / (1000 * 60 * 60 * 24)
     );
 
-    // Calculate if the patient was late for this specific collection visit
     const prevPickupRes = await db.query(
       `SELECT next_expected_date FROM medication_pickups 
        WHERE patient_id = $1 ORDER BY pickup_date DESC LIMIT 1`,
@@ -73,7 +69,6 @@ router.post('/record', async (req, res) => {
       }
     }
 
-    // 1. Insert collection record
     const result = await db.query(
       `INSERT INTO medication_pickups (
           patient_id, pickup_date, next_expected_date, days_supply, days_late
@@ -83,23 +78,18 @@ router.post('/record', async (req, res) => {
 
     const pickup_record = result.rows[0];
 
-    // 2. Synchronize next schedule date to base patient record
     await db.query(
       'UPDATE patients SET next_pickup_date = $1 WHERE patient_id = $2',
       [computed_next_pickup, patient_id]
     );
 
-    // 3. FULL RE-ACTIVATION LOGIC:
-    // This resolves the defaulter status AND sets the patient back to active (is_active = true)
     try {
-      // Resolve any pending defaulter status
       await db.query(
         `UPDATE defaulters SET status = 'resolved'
          WHERE patient_id = $1 AND status = 'pending'`,
         [patient_id]
       );
       
-      // Force patient back to active
       await db.query(
         `UPDATE patients SET is_active = true 
          WHERE patient_id = $1`,
@@ -109,7 +99,6 @@ router.post('/record', async (req, res) => {
       console.warn('System failed to reactivate patient:', dbErr.message);
     }
 
-    // 4. Trigger modern predictive processing to refresh metrics
     await recalculatePatientRisk(patient_id);
 
     res.json({
@@ -127,7 +116,6 @@ router.post('/record', async (req, res) => {
   }
 });
 
-// GET routes
 router.post('/set-first-pickup', async (req, res) => {
   try {
     const { patient_id, first_pickup_date } = req.body;

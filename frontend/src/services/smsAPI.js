@@ -7,14 +7,13 @@ export const smsAPI = {
   /**
    * Send reminder SMS to ONE defaulter
    * 
-   * @param {number} defaulterId - ID of the defaulter
-   * @returns {Promise} - Response from backend
+   * @param {number} defaulterId 
+   * @returns {Promise} 
    */
   sendReminder: async (defaulterId) => {
     try {
       console.log(` Sending SMS request for defaulter ${defaulterId}`);
       
-      // Make POST request to backend
       const response = await axios.post(`${API_URL}/sms/send-reminder`, {
         defaulterId: defaulterId
       });
@@ -31,8 +30,8 @@ export const smsAPI = {
   /**
    * Send SMS to MULTIPLE defaulters
    * 
-   * @param {array} defaulterIds - Array of defaulter IDs
-   * @returns {Promise} - Response from backend
+   * @param {array} defaulterIds 
+   * @returns {Promise} 
    */
   sendBulk: async (defaulterIds) => {
     try {
@@ -54,7 +53,7 @@ export const smsAPI = {
   /**
    * Get SMS sending history
    * 
-   * @returns {Promise} - List of sent SMS
+   * @returns {Promise} 
    */
   getLogs: async () => {
     try {
@@ -67,5 +66,4 @@ export const smsAPI = {
   }
 };
 
-// Export as default
 export default smsAPI;

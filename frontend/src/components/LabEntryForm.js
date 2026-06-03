@@ -19,7 +19,6 @@ function LabEntryForm({ patientId, onSuccess }) {
     e.preventDefault();
     setLoading(true);
 
-    // Sanitize values to prevent PostgreSQL string-to-numeric type crashes
     const sanitizedPayload = {
       patient_id: patientId,
       cd4_count: formData.cd4_count ? parseInt(formData.cd4_count, 10) : null,

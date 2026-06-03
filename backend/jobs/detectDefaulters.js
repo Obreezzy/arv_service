@@ -11,7 +11,7 @@ const detectDefaultersJob = async () => {
 
         await client.query('BEGIN');
         
-        const gracePeriod = 3; // Days after missed pickup
+        const gracePeriod = 3; 
 
         const missedPickups = await client.query(
             `SELECT DISTINCT ON (mp.patient_id)
@@ -47,7 +47,6 @@ const detectDefaultersJob = async () => {
 
         const newDefaulters = [];
 
-        // Flag each patient as defaulter
         for (const patient of missedPickups.rows) {
             const riskLevel = calculateRiskLevel(
                 patient.days_overdue,
@@ -55,7 +54,7 @@ const detectDefaultersJob = async () => {
                 patient.distance_from_clinic
             );
 
-            // Insert defaulter record
+           
             const result = await client.query(
                 `INSERT INTO defaulters (
                     patient_id, missed_pickup_date, days_overdue, risk_level, status
@@ -116,7 +115,6 @@ const detectDefaultersJob = async () => {
     }
 };
 
-// Calculate risk level based on multiple factors
 const calculateRiskLevel = (daysOverdue, previousDefaults, distanceFromClinic) => {
     let score = 0;
 

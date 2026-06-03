@@ -14,8 +14,6 @@ router.get('/test', (req, res) => {
 });
 
 
-// Send SMS to ONE defaulter
-
 router.post('/send-reminder', async (req, res) => {
   try {
     console.log(' SMS send-reminder route hit!');
@@ -32,7 +30,6 @@ router.post('/send-reminder', async (req, res) => {
 
     console.log(`Looking for defaulter with ID: ${defaulterId}`);
 
-    // FIXED QUERY: Use patient_id instead of id
     const query = `
       SELECT 
         d.defaulter_id,
@@ -63,12 +60,11 @@ router.post('/send-reminder', async (req, res) => {
 
     const defaulter = defaulters[0];
 
-    // ADD THESE DEBUG LOGS
     console.log('Full defaulter object:', defaulter);
     console.log('All keys:', Object.keys(defaulter));
     console.log('Phone number field:', defaulter.phone_number);
 
-    // Create patient object for SMS service
+
     const patientForSMS = {
       name: `${defaulter.first_name} ${defaulter.last_name}`,
       phone: defaulter.phone_number
@@ -77,7 +73,6 @@ router.post('/send-reminder', async (req, res) => {
     console.log(`Found patient: ${patientForSMS.name}`);
     console.log(`Phone: ${patientForSMS.phone}`);
 
-    // Validate phone
     if (!patientForSMS.phone) {
       console.log('No phone number found');
       return res.status(400).json({ 
@@ -94,7 +89,6 @@ router.post('/send-reminder', async (req, res) => {
 
     console.log('Phone validated');
 
-    // Send SMS
     let smsResult;
     if (defaulter.risk_level === 'high' || defaulter.days_overdue > 7) {
       console.log('Sending URGENT SMS');
@@ -138,5 +132,4 @@ router.post('/send-reminder', async (req, res) => {
   }
 });
 
-// CRITICAL: Export the router!
 module.exports = router;

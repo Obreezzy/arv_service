@@ -13,7 +13,6 @@ function PickupForm({ isOpen, onClose, onSuccess, preselectedPatient = null, cur
  const [searchQuery, setSearchQuery] = useState('');
  const [loading, setLoading] = useState(false);
 
- // Is this user a nurse? 
  const isNurse = currentUser?.role === 'healthcare_worker';
 
  const getInitialFormData = () => ({
@@ -28,7 +27,6 @@ function PickupForm({ isOpen, onClose, onSuccess, preselectedPatient = null, cur
 
  const [formData, setFormData] = useState(getInitialFormData);
 
- // Re-sync if currentUser loads after mount
  useEffect(() => {
  if (isNurse) {
  setFormData(prev => ({
@@ -129,7 +127,6 @@ function PickupForm({ isOpen, onClose, onSuccess, preselectedPatient = null, cur
 
  if (!isOpen) return null;
 
- // Reusable locked field style 
  const lockedStyle = {
  backgroundColor: '#f0fdf4',
  color: '#166534',

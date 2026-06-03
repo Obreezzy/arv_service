@@ -6,12 +6,11 @@ const { batchCalculateRisk, calculateRiskScore } = require('../services/riskEngi
 
 router.use(verifyToken);
 
-// Flexible middleware to safely check authorization roles without false-positives
 const authorizePrediction = (req, res, next) => {
-    // Looks up properties dynamically across common token property variants
+    
     const userRole = (req.user?.role || req.user?.user_role || req.user?.userRole || '').toLowerCase().trim();
     
-    // Explicitly isolate data entry blocks while letting valid health operators handle operations safely
+
     if (userRole === 'data_entry') {
         return res.status(403).json({ 
             success: false, 
@@ -19,11 +18,9 @@ const authorizePrediction = (req, res, next) => {
         });
     }
     
-    // Fallback safe assumption: If they have passed verifyToken and aren't explicitly data_entry, allow processing
     next();
 };
 
-// 1. POST /api/predictions/batch - Bulk Dashboard Scoring
 router.post('/batch', authorizePrediction, async (req, res) => {
     const { patientIds, weatherAlerts } = req.body;
     const activeWeather = weatherAlerts || [];
@@ -48,7 +45,6 @@ router.post('/batch', authorizePrediction, async (req, res) => {
     }
 });
 
-// 2. POST /api/predictions/:patientId - Single Patient Button
 router.post('/:patientId', authorizePrediction, async (req, res) => {
     const patientId = parseInt(req.params.patientId, 10);
     const weatherAlerts = req.body.weatherAlerts || [];
@@ -65,7 +61,6 @@ router.post('/:patientId', authorizePrediction, async (req, res) => {
     }
 });
 
-// 3. GET /api/predictions/:patientId/history - Logs Trail
 router.get('/:patientId/history', async (req, res) => {
     const patientId = parseInt(req.params.patientId, 10);
     try {

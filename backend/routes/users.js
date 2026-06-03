@@ -1,5 +1,3 @@
-// backend/routes/users.js
-
 const express = require('express');
 const router  = express.Router();
 const { query } = require('../config/db');
@@ -7,7 +5,6 @@ const { verifyToken } = require('../middleware/auth');
 
 router.use(verifyToken);
 
-// GET ALL USERS (
 router.get('/', async (req, res) => {
   try {
     if (req.user.role !== 'admin') {
@@ -29,7 +26,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// TOGGLE USER STATUS
 router.put('/:id/status', async (req, res) => {
   try {
     if (req.user.role !== 'admin') {

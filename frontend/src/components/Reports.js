@@ -19,7 +19,6 @@ function Reports() {
  const [defaultersData, setDefaultersData] = useState([]);
  const [loading, setLoading] = useState(true);
 
- // Report filters
  const [selectedPatient, setSelectedPatient] = useState('');
  const [dateFrom, setDateFrom] = useState('');
  const [dateTo, setDateTo] = useState('');
@@ -59,7 +58,6 @@ function Reports() {
  }
  };
 
- // Helpers 
  const fmtDate = (d) => {
  if (!d) return 'N/A';
  const dt = new Date(d);
@@ -78,7 +76,6 @@ function Reports() {
  doc.setTextColor(0,0,0);
  };
 
- // 1. Summary Report 
  const generateSummaryPDF = () => {
  const doc = new jsPDF();
  pdfHeader(doc, 'Executive Summary Report');
@@ -126,7 +123,6 @@ function Reports() {
  showToast({ type: 'success', message: 'Summary PDF generated!' });
  };
 
- // 2. Patient-Specific Report 
  const generatePatientPDF = async () => {
  const patient = patientsData.find(p => p.patient_id === parseInt(selectedPatient));
  if (!patient) { showToast({ type: 'error', message: 'Please select a patient first' }); return; }
@@ -151,7 +147,6 @@ function Reports() {
  if (isDefaulter) {
  doc.setFontSize(12); doc.setFont('helvetica','bold');
  doc.setTextColor(239,68,68);
- // Removed emojis to prevent PDF garbling
  doc.text(`URGENT: Patient is currently a defaulter (${isDefaulter.days_overdue} days overdue)`, 14, startY);
  doc.setTextColor(0,0,0);
  startY += 10;
@@ -184,7 +179,6 @@ function Reports() {
  columnStyles: { 0: { fontStyle:'bold', cellWidth: 60 } }
  });
 
- // Recent Pickup History Section (AI section removed entirely) 
  const nextY = doc.lastAutoTable.finalY + 15;
  doc.setFontSize(13); doc.setFont('helvetica','bold');
  doc.text('Recent Pickup History', 14, nextY); 
@@ -238,7 +232,6 @@ function Reports() {
  showToast({ type: 'success', message: `Report for ${patient.first_name} generated!` });
  };
 
- // 3. High Risk Report 
  const generateHighRiskPDF = () => {
  const doc = new jsPDF();
  pdfHeader(doc, 'High Risk Patients Report');
@@ -270,7 +263,6 @@ function Reports() {
  showToast({ type: 'success', message: 'High Risk report generated!' });
  };
 
- // 4. Defaulters Report 
  const generateDefaultersPDF = () => {
  const doc = new jsPDF();
  pdfHeader(doc, 'Defaulters Tracking Report');
@@ -300,11 +292,9 @@ function Reports() {
  showToast({ type: 'success', message: 'Defaulters report generated!' });
  };
 
- // 5. Excel Export 
  const generateExcel = () => {
  const wb = XLSX.utils.book_new();
 
- // Patients sheet
  const pSheet = XLSX.utils.json_to_sheet(patientsData.map(p => ({
  'Patient Number': p.patient_number,
  'First Name': p.first_name,
@@ -326,7 +316,6 @@ function Reports() {
  })));
  XLSX.utils.book_append_sheet(wb, pSheet, 'Patients');
 
- // Defaulters sheet
  const dSheet = XLSX.utils.json_to_sheet(defaultersData.map(d => ({
  'Patient Name': `${d.first_name} ${d.last_name}`,
  'Patient ID': d.patient_number,
@@ -338,7 +327,6 @@ function Reports() {
  })));
  XLSX.utils.book_append_sheet(wb, dSheet, 'Defaulters');
 
- // Summary sheet
  const sSheet = XLSX.utils.json_to_sheet([
  { Metric: 'Total Patients', Value: stats.totalPatients },
  { Metric: 'Active Defaulters', Value: stats.totalDefaulters },

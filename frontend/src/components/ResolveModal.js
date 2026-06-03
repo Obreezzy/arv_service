@@ -51,7 +51,7 @@ function ResolveModal({ defaulter, onClose, onSuccess }) {
  onChange={(e) => setStatus(e.target.value)}
  className="status-select"
  >
- <option value="returned">🟢 Returned to Care (Medication Collected)</option>
+ <option value="returned"> Returned to Care (Medication Collected)</option>
  <option value="lost_to_followup"> Lost to Follow-up (Cannot be reached)</option>
  <option value="transferred"> Transferred (Moved to another clinic)</option>
  </select>
