@@ -75,7 +75,6 @@ LEFT JOIN pickup_agg pa ON pa.patient_id = pb.patient_id
 LEFT JOIN lab_agg    la ON la.patient_id = pb.patient_id;
 `;
 
-// FULLY RESTORED PAYLOAD MAPPING
 const buildFlaskPayload = (f) => ({
     age                  : f.age || 30,
     gender               : f.gender_m === 1 ? 'M' : 'F',   
@@ -142,12 +141,23 @@ const calculateRiskScore = async (patientId) => {
 
 const batchCalculateRisk = async (patientIds) => {
     if (!patientIds || !patientIds.length) return [];
-    return await Promise.all(patientIds.map(async (id) => {
-        const { rows } = await query(FEATURE_QUERY, [[id]]);
-        const { score, label, factors } = await scoreOnePatient(rows[0]);
-        await saveToAuditTrail(id, score, label, 'ml_model', rows[0], factors);
-        return { patientId: id, score, label, factors };
-    }));
+    
+    const { rows } = await query(FEATURE_QUERY, [patientIds]);
+    if (!rows.length) return [];
+
+    const results = [];
+    
+    for (const features of rows) {
+        try {
+            const { score, label, factors } = await scoreOnePatient(features);
+            await saveToAuditTrail(features.patient_id, score, label, 'ml_model', features, factors);
+            results.push({ patientId: features.patient_id, score, label, factors });
+        } catch (err) {
+            console.error(`Skipping patient ${features.patient_id} due to ML timeout/error:`, err.message);
+        
+    }
+    
+    return results;
 };
 
 module.exports = { calculateRiskScore, batchCalculateRisk, checkMLHealth: async () => true };
