@@ -360,14 +360,29 @@ router.put('/:id', async (req, res) => {
 
 // DELETE PATIENT (Hard delete including all history)
 router.delete('/:id', async (req, res) => {
-    const patientId = req.params.id;
+    const patientId = parseInt(req.params.id);
+    
     try {
-        // 1. Safely delete child records first to prevent Foreign Key constraint crashes
-        await query('DELETE FROM risk_scores WHERE patient_id = $1', [patientId]);
-        await query('DELETE FROM medication_pickups WHERE patient_id = $1', [patientId]);
-        await query('DELETE FROM lab_results WHERE patient_id = $1', [patientId]);
-        await query('DELETE FROM patient_treatments WHERE patient_id = $1', [patientId]);
-        await query('DELETE FROM defaulters WHERE patient_id = $1', [patientId]);
+        // 1. Safely delete child records. 
+        // Wrapped in individual try/catch blocks so missing tables don't crash the server.
+        const childTables = [
+            'risk_scores', 
+            'medication_pickups', 
+            'lab_results', 
+            'patient_treatments', 
+            'defaulters',
+            'sms_logs',       
+            'reminders',      
+            'notifications'
+        ];
+
+        for (const table of childTables) {
+            try {
+                await query(`DELETE FROM ${table} WHERE patient_id = $1`, [patientId]);
+            } catch (tableErr) {
+                // Silently ignore if the table does not exist in the database
+            }
+        }
 
         // 2. Delete the master patient record
         const result = await query('DELETE FROM patients WHERE patient_id = $1 RETURNING *', [patientId]);
@@ -379,7 +394,7 @@ router.delete('/:id', async (req, res) => {
         res.json({ success: true, message: 'Patient entirely deleted from the system' });
     } catch (err) {
         console.error('Delete patient error:', err);
-        res.status(500).json({ success: false, message: err.message });
+        res.status(500).json({ success: false, message: 'Could not delete patient due to a database constraint. Check server logs.' });
     }
 });
 
