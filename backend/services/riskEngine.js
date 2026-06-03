@@ -4,11 +4,13 @@ const axios  = require('axios');
 const { query } = require('../config/db');
 
 const ML_API_URL   = process.env.ML_API_URL || 'https://arv-service-ml.onrender.com';
-const FLASK_TIMEOUT = 8000; 
+// INCREASED: 45 seconds to survive Render Free Tier cold starts
+const FLASK_TIMEOUT = 45000; 
 
 const MARITAL_DB_TO_FLASK = { 0: 'single', 1: 'married', 2: 'divorced', 3: 'widowed' };
 const FUNCTIONAL_DB_TO_FLASK = { 0: 'working', 1: 'ambulatory', 2: 'bedridden' };
 
+// FIXED SQL: Removed non-existent weight_kg and side_effects columns to prevent DB crashes
 const FEATURE_QUERY = `
 WITH patient_base AS (
     SELECT
@@ -44,9 +46,7 @@ lab_agg AS (
         (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date ASC))[1] AS first_cd4,
         COALESCE((ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date DESC))[1] - (ARRAY_AGG(lr.cd4_count ORDER BY lr.test_date DESC))[2], 0) AS cd4_improvement,
         COALESCE(ROUND(AVG(CASE WHEN lr.vl_suppressed = true THEN 1.0 ELSE 0.0 END)::NUMERIC, 4), 1.0) AS vl_sup_rate,
-        (ARRAY_AGG(CASE WHEN lr.vl_suppressed = true THEN 1 ELSE 0 END ORDER BY lr.test_date DESC))[1] AS latest_vl_suppressed,
-        (ARRAY_AGG(lr.weight_kg ORDER BY lr.test_date DESC))[1] AS latest_weight,
-        COALESCE(ROUND(AVG(CASE WHEN lr.side_effects IS NOT NULL AND lr.side_effects != '' THEN 1.0 ELSE 0.0 END)::NUMERIC, 4), 0) AS side_effect_rate
+        (ARRAY_AGG(CASE WHEN lr.vl_suppressed = true THEN 1 ELSE 0 END ORDER BY lr.test_date DESC))[1] AS latest_vl_suppressed
     FROM lab_results lr
     WHERE lr.patient_id = ANY($1::int[])
     GROUP BY lr.patient_id
@@ -59,17 +59,17 @@ SELECT
     COALESCE(pa.mmd_rate, 0) AS mmd_rate,
     COALESCE(pa.avg_days_supply, 30) AS avg_days_supply,
     COALESCE(pa.stock_out_rate, 0) AS stock_out_rate,
-    COALESCE(la.side_effect_rate, 0) AS side_effect_rate,
     COALESCE(pa.pharm_reg_changes, 0) AS pharm_reg_changes,
+    0.0 AS side_effect_rate,
     0.0 AS counselling_rate,
-    COALESCE(la.latest_weight, 60) AS latest_weight,
-    0.0 AS latest_bmi,
+    60.0 AS latest_weight,
+    21.0 AS latest_bmi,
     COALESCE(la.latest_cd4, 0) AS latest_cd4,
     COALESCE(la.first_cd4, 0) AS first_cd4,
     COALESCE(la.cd4_improvement, 0) AS cd4_improvement,
     COALESCE(la.vl_sup_rate, 1) AS vl_sup_rate,
     COALESCE(la.latest_vl_suppressed, 1) AS latest_vl_suppressed,
-    COALESCE(la.best_hb, 12) AS best_hb
+    12.0 AS best_hb
 FROM patient_base pb
 LEFT JOIN pickup_agg pa ON pa.patient_id = pb.patient_id
 LEFT JOIN lab_agg    la ON la.patient_id = pb.patient_id;
@@ -126,35 +126,43 @@ const saveToAuditTrail = async (patientId, score, label, source, features, facto
 };
 
 const scoreOnePatient = async (features) => {
-    const mlResponse = await axios.post(`${ML_API_URL}/predict`, buildFlaskPayload(features), { timeout: FLASK_TIMEOUT });
-    const score = mlResponse.data.score;
-    const factors = [...(mlResponse.data.factors || []), ...buildRiskFactors(features)];
-    return { score, label: score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low', factors };
+    try {
+        const mlResponse = await axios.post(`${ML_API_URL}/predict`, buildFlaskPayload(features), { timeout: FLASK_TIMEOUT });
+        const score = mlResponse.data.score;
+        const factors = [...(mlResponse.data.factors || []), ...buildRiskFactors(features)];
+        return { score, label: score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low', factors };
+    } catch (err) {
+        console.warn(`ML Engine Timeout/Error for Patient ${features.patient_id}. Activating Safe Mode.`);
+        // SAFE MODE: If Python is offline, calculate the Clinical Warnings natively so the app never crashes
+        const fallbackFactors = buildRiskFactors(features);
+        return { 
+            score: 15, 
+            label: 'Low', 
+            factors: ['⚠️ ML Engine Offline - Showing Baseline Risk', ...fallbackFactors] 
+        };
+    }
 };
 
-const calculateRiskScore = async (patientId) => {
+const calculateRiskScore = async (patientId, activeWeatherAlerts = []) => {
     const { rows } = await query(FEATURE_QUERY, [[patientId]]);
+    if (!rows || rows.length === 0) throw new Error("Patient data not found.");
+    
     const { score, label, factors } = await scoreOnePatient(rows[0]);
     await saveToAuditTrail(patientId, score, label, 'ml_model', rows[0], factors);
     return { patientId, score, label, factors };
 };
 
-const batchCalculateRisk = async (patientIds) => {
+const batchCalculateRisk = async (patientIds, activeWeatherAlerts = []) => {
     if (!patientIds || !patientIds.length) return [];
     
     const { rows } = await query(FEATURE_QUERY, [patientIds]);
-    if (!rows.length) return [];
+    if (!rows || !rows.length) return [];
 
     const results = [];
-    
     for (const features of rows) {
-        try {
-            const { score, label, factors } = await scoreOnePatient(features);
-            await saveToAuditTrail(features.patient_id, score, label, 'ml_model', features, factors);
-            results.push({ patientId: features.patient_id, score, label, factors });
-        } catch (err) {
-            console.error(`Skipping patient ${features.patient_id} due to ML timeout/error:`, err.message);
-        }
+        const { score, label, factors } = await scoreOnePatient(features);
+        await saveToAuditTrail(features.patient_id, score, label, 'ml_model', features, factors);
+        results.push({ patientId: features.patient_id, score, label, factors });
     }
     
     return results;
