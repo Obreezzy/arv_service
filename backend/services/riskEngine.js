@@ -154,7 +154,7 @@ const batchCalculateRisk = async (patientIds) => {
             results.push({ patientId: features.patient_id, score, label, factors });
         } catch (err) {
             console.error(`Skipping patient ${features.patient_id} due to ML timeout/error:`, err.message);
-        
+        }
     }
     
     return results;
