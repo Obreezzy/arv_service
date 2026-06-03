@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Loader2, Pill, CheckCircle } from 'lucide-react';
+import { RefreshCw, Loader2, Pill, CheckCircle, Trash2 } from 'lucide-react';
 import './Defaulters.css';
-import { defaultersAPI } from '../services/api';
+import { defaultersAPI, patientsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import PickupForm from './PickupForm';
 
@@ -32,6 +32,23 @@ function Defaulters({ currentUser }) {
       case 'medium': return 'risk-medium';
       case 'low':    return 'risk-low';
       default:       return 'risk-default';
+    }
+  };
+
+  // NEW: Delete Patient Logic for Defaulters List
+  const handleDeletePatient = async (patient) => {
+    if (!window.confirm(`CRITICAL WARNING: Are you sure you want to permanently delete ${patient.first_name} ${patient.last_name}? This will erase their entire clinical history and remove them from the system forever.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      await patientsAPI.deletePatient(patient.patient_id);
+      showToast({ type: 'success', message: 'Patient completely deleted from the database.' });
+      loadDefaulters();
+    } catch (err) {
+      console.error(err);
+      showToast({ type: 'error', message: 'Error deleting patient.' });
+      setLoading(false);
     }
   };
 
@@ -94,19 +111,29 @@ function Defaulters({ currentUser }) {
                       </span>
                     </td>
                     <td>
-                      <button
-                        className="btn-record-pickup"
-                        onClick={() => setPickupPatient({
-                          patient_id:       d.patient_id,
-                          first_name:       d.first_name,
-                          last_name:        d.last_name,
-                          patient_number:   d.patient_number,
-                          phone_number:     d.phone_number,
-                          pickup_frequency: d.pickup_frequency || 30
-                        })}
-                      >
-                        <Pill size={15} /> Record Pickup
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        <button
+                          className="btn-record-pickup"
+                          onClick={() => setPickupPatient({
+                            patient_id:       d.patient_id,
+                            first_name:       d.first_name,
+                            last_name:        d.last_name,
+                            patient_number:   d.patient_number,
+                            phone_number:     d.phone_number,
+                            pickup_frequency: d.pickup_frequency || 30
+                          })}
+                        >
+                          <Pill size={15} /> Record Pickup
+                        </button>
+                        <button 
+                          className="btn-icon delete" 
+                          title="Delete Patient Entirely" 
+                          style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.4rem', borderRadius: '4px' }} 
+                          onClick={() => handleDeletePatient(d)}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

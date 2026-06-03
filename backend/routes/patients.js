@@ -309,37 +309,19 @@ router.put('/:id', async (req, res) => {
                 gender_m=$28, marital_enc=$29, functional_enc=$30, has_supporter=$31
              WHERE patient_id=$32 RETURNING *`,
             [
-                first_name, 
-                last_name, 
-                fullName, 
-                date_of_birth, 
-                gender,
-                phone_number, 
-                alternative_phone || null,
-                province || null, 
-                district || null, 
-                ward || null,
-                village  || null, 
-                headman   || null,
-                arv_regimen || null,
-                nokName, 
-                nokPhone,
-                next_pickup_date || null,
-                parseInt(pickup_frequency) || 30,
-                clinic_name   || null,
-                clinic_number || null,
-                nurse_number  || null,
-                marital_status || null,
-                isSupporter,
-                parseInt(who_clinical_stage) || 2,
-                art_start_date || null,
+                first_name, last_name, fullName, date_of_birth, gender,
+                phone_number, alternative_phone || null,
+                province || null, district || null, ward || null,
+                village  || null, headman   || null,
+                arv_regimen || null, nokName, nokPhone,
+                next_pickup_date || null, parseInt(pickup_frequency) || 30,
+                clinic_name   || null, clinic_number || null, nurse_number  || null,
+                marital_status || null, isSupporter,
+                parseInt(who_clinical_stage) || 2, art_start_date || null,
                 parseInt(chronic_score) || 0,
-                tb_flag        === true || tb_flag        === 'true' ? true : false,
+                tb_flag === true || tb_flag === 'true' ? true : false,
                 pregnancy_flag === true || pregnancy_flag === 'true' ? true : false,
-                genderM,       
-                maritalEnc,    
-                functionalEnc, 
-                isSupporter,   
+                genderM, maritalEnc, functionalEnc, isSupporter,   
                 req.params.id, 
             ]
         );
@@ -372,6 +354,31 @@ router.put('/:id', async (req, res) => {
         res.json({ success: true, patient: updatedPatient });
     } catch (err) {
         console.error('Update patient error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// DELETE PATIENT (Hard delete including all history)
+router.delete('/:id', async (req, res) => {
+    const patientId = req.params.id;
+    try {
+        // 1. Safely delete child records first to prevent Foreign Key constraint crashes
+        await query('DELETE FROM risk_scores WHERE patient_id = $1', [patientId]);
+        await query('DELETE FROM medication_pickups WHERE patient_id = $1', [patientId]);
+        await query('DELETE FROM lab_results WHERE patient_id = $1', [patientId]);
+        await query('DELETE FROM patient_treatments WHERE patient_id = $1', [patientId]);
+        await query('DELETE FROM defaulters WHERE patient_id = $1', [patientId]);
+
+        // 2. Delete the master patient record
+        const result = await query('DELETE FROM patients WHERE patient_id = $1 RETURNING *', [patientId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Patient not found' });
+        }
+
+        res.json({ success: true, message: 'Patient entirely deleted from the system' });
+    } catch (err) {
+        console.error('Delete patient error:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });

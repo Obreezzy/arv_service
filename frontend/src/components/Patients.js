@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Component } from 'react';
-import { Search, Eye, Pencil, UserPlus } from 'lucide-react';
+import { Search, Eye, Pencil, UserPlus, Trash2 } from 'lucide-react';
 import './Patients.css';
 import { patientsAPI, predictionsAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -94,6 +94,23 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
     setEditingPatient(null);
     loadPatients();
   }, [loadPatients]);
+
+  // NEW: Delete Patient Logic
+  const handleDeletePatient = async (patient) => {
+    if (!window.confirm(`CRITICAL WARNING: Are you sure you want to permanently delete ${patient.first_name} ${patient.last_name}? This will erase their entire clinical history, lab results, and pickup logs. This cannot be undone.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      await patientsAPI.deletePatient(patient.patient_id);
+      showToast({ type: 'success', message: 'Patient completely deleted from the database.' });
+      loadPatients();
+    } catch (err) {
+      console.error(err);
+      showToast({ type: 'error', message: 'Error deleting patient.' });
+      setLoading(false);
+    }
+  };
 
   useEffect(() => { 
     setRiskFilter(initialRiskFilter || 'All'); 
@@ -387,6 +404,7 @@ function PatientsContent({ initialRiskFilter = 'All', currentUser }) {
                         <div className="action-buttons">
                           <button className="btn-icon view" title="View Details" onClick={() => setSelectedPatient(p)}><Eye size={15} /></button>
                           <button className="btn-icon edit" title="Edit Patient" onClick={() => setEditingPatient(p)}><Pencil size={15} /></button>
+                          <button className="btn-icon delete" title="Delete Patient" style={{ color: '#ef4444' }} onClick={() => handleDeletePatient(p)}><Trash2 size={15} /></button>
                         </div>
                       </td>
                     </tr>
