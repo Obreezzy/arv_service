@@ -61,28 +61,51 @@ SELECT
     COALESCE(pa.stock_out_rate, 0) AS stock_out_rate,
     COALESCE(la.side_effect_rate, 0) AS side_effect_rate,
     COALESCE(pa.pharm_reg_changes, 0) AS pharm_reg_changes,
+    0.0 AS counselling_rate,
     COALESCE(la.latest_weight, 60) AS latest_weight,
+    0.0 AS latest_bmi,
     COALESCE(la.latest_cd4, 0) AS latest_cd4,
+    COALESCE(la.first_cd4, 0) AS first_cd4,
     COALESCE(la.cd4_improvement, 0) AS cd4_improvement,
     COALESCE(la.vl_sup_rate, 1) AS vl_sup_rate,
-    COALESCE(la.latest_vl_suppressed, 1) AS latest_vl_suppressed
+    COALESCE(la.latest_vl_suppressed, 1) AS latest_vl_suppressed,
+    COALESCE(la.best_hb, 12) AS best_hb
 FROM patient_base pb
 LEFT JOIN pickup_agg pa ON pa.patient_id = pb.patient_id
 LEFT JOIN lab_agg    la ON la.patient_id = pb.patient_id;
 `;
 
+// FULLY RESTORED PAYLOAD MAPPING
 const buildFlaskPayload = (f) => ({
-    age: f.age || 30,
-    gender: f.gender_m === 1 ? 'M' : 'F',
-    treatment_supporter: f.has_supporter === 1,
-    marital_status: MARITAL_DB_TO_FLASK[f.marital_enc] ?? 'single',
-    functional_status: FUNCTIONAL_DB_TO_FLASK[f.functional_enc] ?? 'working',
-    who_clinical_stage: f.who_clinical_stage || 1,
-    months_on_art: f.months_on_art || 0,
-    missed_rate: f.missed_rate || 0,
-    latest_cd4: f.latest_cd4 || 350,
-    cd4_improvement: f.cd4_improvement || 0,
-    latest_vl_suppressed: (f.latest_vl_suppressed !== undefined && f.latest_vl_suppressed !== null) ? f.latest_vl_suppressed : 1
+    age                  : f.age || 30,
+    gender               : f.gender_m === 1 ? 'M' : 'F',   
+    treatment_supporter  : f.has_supporter === 1,                  
+    tb_coinfection       : f.tb_flag === 1,                        
+    pregnancy_status     : f.pregnancy_flag === 1,                 
+    marital_status       : MARITAL_DB_TO_FLASK[f.marital_enc]      ?? 'single',
+    functional_status    : FUNCTIONAL_DB_TO_FLASK[f.functional_enc] ?? 'working',
+    chronic_conditions   : 'none',   
+    chronic_score        : f.chronic_score || 0, 
+    who_clinical_stage   : f.who_clinical_stage || 1,
+    months_on_art        : f.months_on_art || 0,
+    regimen_changes      : f.regimen_changes || 0,
+    avg_days_late        : f.avg_days_late || 0,
+    pct_very_late        : f.pct_very_late || 0,
+    missed_rate          : f.missed_rate || 0,
+    side_effect_rate     : f.side_effect_rate || 0,
+    counselling_rate     : f.counselling_rate || 0,
+    mmd_rate             : f.mmd_rate || 0,
+    avg_days_supply      : f.avg_days_supply || 30,
+    stock_out_rate       : f.stock_out_rate || 0,
+    pharm_reg_changes    : f.pharm_reg_changes || 0,
+    latest_weight        : f.latest_weight || 60,
+    latest_bmi           : f.latest_bmi || 21,
+    best_hb              : f.best_hb || 12,
+    latest_cd4           : f.latest_cd4 || 350,
+    first_cd4            : f.first_cd4 || 350,
+    cd4_improvement      : f.cd4_improvement || 0,
+    vl_sup_rate          : f.vl_sup_rate || 1,
+    latest_vl_suppressed : (f.latest_vl_suppressed !== undefined && f.latest_vl_suppressed !== null) ? f.latest_vl_suppressed : 1,
 });
 
 const buildRiskFactors = (f) => {
