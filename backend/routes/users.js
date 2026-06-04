@@ -2,6 +2,7 @@ const express = require('express');
 const router  = express.Router();
 const { query } = require('../config/db');
 const { verifyToken } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
 
 router.use(verifyToken);
 
@@ -21,7 +22,6 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, users: result.rows });
   } catch (err) {
-    console.error('Error fetching users:', err);
     res.status(500).json({ success: false, message: 'Server error fetching users' });
   }
 });
@@ -41,9 +41,35 @@ router.put('/:id/status', async (req, res) => {
 
     res.json({ success: true, message: 'User status updated', user: result.rows[0] });
   } catch (err) {
-    console.error('Error updating user status:', err);
     res.status(500).json({ success: false, message: 'Server error updating user' });
   }
+});
+
+router.put('/:id/reset-password', async (req, res) => {
+    const userId = req.params.id;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    try {
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        const result = await query(
+            `UPDATE users SET password_hash = $1 WHERE user_id = $2 RETURNING user_id, email, full_name`,
+            [hashedPassword, userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'Password successfully reset.' });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Server error during password reset.' });
+    }
 });
 
 module.exports = router;

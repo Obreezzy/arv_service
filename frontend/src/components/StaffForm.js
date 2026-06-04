@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { authAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 
-// All facilities from the Chipinge ART Cohort dataset
 const FACILITIES = [
   { name: 'St Peters Checheche Clinic',   code: 'CHP-SP' },
   { name: 'Tamanda Clinic',               code: 'CHP-TM' },
@@ -113,7 +112,6 @@ function StaffForm({ onClose, onSuccess }) {
               display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
               fontSize: '0.85rem', color: '#991b1b'
             }}>
-              <span style={{ fontSize: '1rem', flexShrink: 0 }}>⚠️</span>
               <span>{formError}</span>
             </div>
           )}
@@ -132,7 +130,7 @@ function StaffForm({ onClose, onSuccess }) {
                 value={formData.username} onChange={handleChange}
                 placeholder="e.g. tendai.moyo" />
               <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
-                Must be unique — used for login identification
+                Must be unique - used for login identification
               </small>
             </div>
 
@@ -142,7 +140,7 @@ function StaffForm({ onClose, onSuccess }) {
                 value={formData.email} onChange={handleChange}
                 placeholder="e.g. tendai@clinic.com" />
               <small style={{ color: '#6b7280', fontSize: '0.75rem' }}>
-                Must be unique — used to log into the system
+                Must be unique - used to log into the system
               </small>
             </div>
 
@@ -173,7 +171,6 @@ function StaffForm({ onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* CLINIC ASSIGNMENT */}
           {needsClinic && (
             <div style={{ marginTop: '1.25rem' }}>
               <div style={{
@@ -181,11 +178,10 @@ function StaffForm({ onClose, onSuccess }) {
                 textTransform: 'uppercase', letterSpacing: '0.05em',
                 marginBottom: '0.75rem'
               }}>
-                🏥 Facility Assignment
+                Facility Assignment
               </div>
 
               <div className="form-grid">
-                {/* Searchable facility dropdown */}
                 <div className="form-group">
                   <label>Facility Name <span style={{ color: '#ef4444' }}>*</span></label>
                   <div style={{ position: 'relative' }}>
@@ -238,7 +234,6 @@ function StaffForm({ onClose, onSuccess }) {
                   </small>
                 </div>
 
-                {/* Facility code — auto-fills */}
                 <div className="form-group">
                   <label>Facility Code <span style={{ color: '#ef4444' }}>*</span></label>
                   <input
@@ -260,7 +255,6 @@ function StaffForm({ onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Notice */}
           <div style={{
             marginTop: '1rem', padding: '0.75rem 1rem', borderRadius: '8px',
             backgroundColor: isNurseRole ? '#f0fdf4' : '#f8fafc',

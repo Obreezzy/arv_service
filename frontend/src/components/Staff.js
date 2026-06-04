@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Key } from 'lucide-react';
 import './Staff.css';
 import { usersAPI } from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -18,7 +19,6 @@ function Staff() {
       const res = await usersAPI.getAllUsers();
       setUsers(res.users || []);
     } catch (err) {
-      console.error(err);
       showToast({ type: 'error', message: 'Failed to load staff directory' });
     } finally {
       setLoading(false);
@@ -36,6 +36,23 @@ function Staff() {
       loadUsers();
     } catch (err) {
       showToast({ type: 'error', message: 'Failed to update account status.' });
+    }
+  };
+
+  const handleResetPassword = async (staffId, staffName) => {
+    const newPassword = window.prompt(`Enter a new temporary password for ${staffName} (min 6 characters):`);
+    
+    if (!newPassword) return;
+    if (newPassword.length < 6) {
+        showToast({ type: 'error', message: 'Password must be at least 6 characters!' });
+        return;
+    }
+
+    try {
+        await usersAPI.resetPassword(staffId, newPassword);
+        showToast({ type: 'success', message: `Password reset successfully. Inform ${staffName} of their new temporary password.` });
+    } catch (err) {
+        showToast({ type: 'error', message: err.response?.data?.message || 'Failed to reset password.' });
     }
   };
 
@@ -127,12 +144,20 @@ function Staff() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      className={`btn-toggle ${u.is_active ? 'btn-deactivate' : 'btn-activate'}`}
-                      onClick={() => handleToggleStatus(u)}
-                    >
-                      {u.is_active ? 'Deactivate' : 'Activate'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <button
+                        className={`btn-toggle ${u.is_active ? 'btn-deactivate' : 'btn-activate'}`}
+                        onClick={() => handleToggleStatus(u)}
+                      >
+                        {u.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
+                      <button 
+                        style={{ color: '#3b82f6', marginLeft: '15px', background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} 
+                        onClick={() => handleResetPassword(u.user_id, u.full_name)}
+                      >
+                        <Key size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

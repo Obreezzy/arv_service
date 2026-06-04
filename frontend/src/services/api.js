@@ -26,7 +26,8 @@ export const authAPI = {
 
 export const usersAPI = {
   getAllUsers: async () => { const response = await api.get('/users'); return response.data; },
-  toggleStatus: async (id, is_active) => { const response = await api.put(`/users/${id}/status`, { is_active }); return response.data; }
+  toggleStatus: async (id, is_active) => { const response = await api.put(`/users/${id}/status`, { is_active }); return response.data; },
+  resetPassword: async (id, newPassword) => { const response = await api.put(`/users/${id}/reset-password`, { newPassword }); return response.data; }
 };
 
 export const dashboardAPI = {
