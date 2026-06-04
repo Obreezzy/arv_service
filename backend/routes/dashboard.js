@@ -7,8 +7,6 @@ const router = express.Router();
 
 router.use(verifyToken);
 
-// ROUTE 1: GET DASHBOARD OVERVIEW
-
 router.get('/overview', async (req, res) => {
     try {
         console.log('Fetching dashboard overview');

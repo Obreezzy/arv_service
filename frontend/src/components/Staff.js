@@ -40,7 +40,7 @@ function Staff() {
   };
 
   const handleResetPassword = async (staffId, staffName) => {
-    const newPassword = window.prompt(`Enter a new temporary password for ${staffName} (min 6 characters):`);
+    const newPassword = window.prompt(`Enter a new password for ${staffName} (min 6 characters):`);
     
     if (!newPassword) return;
     if (newPassword.length < 6) {
@@ -50,7 +50,7 @@ function Staff() {
 
     try {
         await usersAPI.resetPassword(staffId, newPassword);
-        showToast({ type: 'success', message: `Password reset successfully. Inform ${staffName} of their new temporary password.` });
+        showToast({ type: 'success', message: `Password reset successfully. Inform ${staffName} of their new password.` });
     } catch (err) {
         showToast({ type: 'error', message: err.response?.data?.message || 'Failed to reset password.' });
     }
