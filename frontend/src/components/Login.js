@@ -69,6 +69,10 @@ function Login({ onLogin }) {
           </button>
         </form>
 
+        <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.875rem', color: '#6b7280', padding: '0 1rem', marginBottom: '1rem' }}>
+          Forgot your password? Please contact the <strong>System Admin (STF-001)</strong> to request a secure credential reset.
+        </div>
+
         <div className="login-footer">
             <p>Unauthorized access is strictly prohibited. This system contains sensitive patient medical records.</p>
         </div>
