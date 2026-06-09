@@ -4,13 +4,11 @@ const axios  = require('axios');
 const { query } = require('../config/db');
 
 const ML_API_URL   = process.env.ML_API_URL || 'https://arv-service-ml.onrender.com';
-// INCREASED: 45 seconds to survive Render Free Tier cold starts
 const FLASK_TIMEOUT = 45000; 
 
 const MARITAL_DB_TO_FLASK = { 0: 'single', 1: 'married', 2: 'divorced', 3: 'widowed' };
 const FUNCTIONAL_DB_TO_FLASK = { 0: 'working', 1: 'ambulatory', 2: 'bedridden' };
 
-// FIXED SQL: Removed non-existent weight_kg and side_effects columns to prevent DB crashes
 const FEATURE_QUERY = `
 WITH patient_base AS (
     SELECT
@@ -133,12 +131,11 @@ const scoreOnePatient = async (features) => {
         return { score, label: score >= 75 ? 'High' : score >= 40 ? 'Medium' : 'Low', factors };
     } catch (err) {
         console.warn(`ML Engine Timeout/Error for Patient ${features.patient_id}. Activating Safe Mode.`);
-        // SAFE MODE: If Python is offline, calculate the Clinical Warnings natively so the app never crashes
         const fallbackFactors = buildRiskFactors(features);
         return { 
             score: 15, 
             label: 'Low', 
-            factors: ['⚠️ ML Engine Offline - Showing Baseline Risk', ...fallbackFactors] 
+            factors: [' ML Engine Offline - Showing Baseline Risk', ...fallbackFactors] 
         };
     }
 };
